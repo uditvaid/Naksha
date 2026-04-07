@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "Nakshatra",
+    "slug": "nakshatra",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#080B14"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.uditvaid.nakshatra",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Nakshatra uses your camera to read your palm lines for Vedic palmistry analysis.",
+        "NSPhotoLibraryUsageDescription": "Nakshatra can analyze photos of your palm for palmistry readings.",
+        "NSUserNotificationUsageDescription": "Nakshatra sends you personalized daily cosmic alerts based on your birth chart."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#080B14"
+      },
+      "package": "com.uditvaid.nakshatra",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-camera",
+      "expo-image-picker",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "newArchEnabled": false
+          },
+          "android": {
+            "newArchEnabled": false
+          }
+        }
+      ],
+      "expo-notifications"
+    ],
+    "scheme": "nakshatra",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      },
+      "revenueCatApiKey": "YOUR_REVENUECAT_API_KEY",
+      "anthropicApiKey": "YOUR_ANTHROPIC_API_KEY"
+    }
+  }
+}
