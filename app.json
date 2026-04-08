@@ -14,11 +14,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.uditvaid.nakshatra",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "Nakshatra uses your camera to read your palm lines for Vedic palmistry analysis.",
         "NSPhotoLibraryUsageDescription": "Nakshatra can analyze photos of your palm for palmistry readings.",
-        "NSUserNotificationUsageDescription": "Nakshatra sends you personalized daily cosmic alerts based on your birth chart."
+        "NSUserNotificationUsageDescription": "Nakshatra sends you personalized daily cosmic alerts based on your birth chart.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -29,8 +30,10 @@
       "package": "com.uditvaid.nakshatra",
       "versionCode": 1,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -61,7 +64,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "acac732e-95a4-4c55-b540-f526bc0849b2"
       },
       "revenueCatApiKey": "YOUR_REVENUECAT_API_KEY",
       "anthropicApiKey": "YOUR_ANTHROPIC_API_KEY"
