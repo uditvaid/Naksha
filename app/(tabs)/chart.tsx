@@ -94,14 +94,15 @@ function DetailModal({
         </View>
 
         <ScrollView style={modalStyles.body} showsVerticalScrollIndicator={false}>
-          {loading ? (
-            <View style={modalStyles.loadingState}>
-              <ActivityIndicator color={Colors.gold} size="large" />
-              <Text style={modalStyles.loadingText}>The Guru is reading your chart…</Text>
-            </View>
-          ) : content ? (
+          {content ? (
             <Text style={modalStyles.content}>{content}</Text>
           ) : null}
+          {loading && (
+            <View style={modalStyles.loadingState}>
+              <ActivityIndicator color={Colors.gold} size="small" />
+              <Text style={modalStyles.loadingText}>The Guru is personalising this for you…</Text>
+            </View>
+          )}
 
           {/* Ask Guru button */}
           <TouchableOpacity
@@ -157,38 +158,92 @@ export default function ChartScreen() {
   const yogas = user.chart?.yogas ?? [];
   const now = new Date();
   const isPremium = user.isPremium;
-  const planetCacheRef = useRef<Record<string, string>>({});
+  const guruCacheRef = useRef<Record<string, string>>({});
 
-  const openDasha = (dasha: any) => {
+  const openDasha = async (dasha: any) => {
     if (!isPremium) { router.push('/paywall'); return; }
     const info = DASHA_MEANINGS[dasha.planet];
     const start = new Date(dasha.startDate);
     const end = new Date(dasha.endDate);
+    const cacheKey = `dasha-${dasha.planet}`;
     setModalTitle(`${dasha.planet} Period`);
     setModalSubtitle(`${start.getFullYear()} – ${end.getFullYear()} · ${dasha.years} years`);
-    setModalContent(info
+
+    if (guruCacheRef.current[cacheKey]) {
+      setModalContent(guruCacheRef.current[cacheKey]);
+      setModalLoading(false);
+      setModalVisible(true);
+      return;
+    }
+
+    // Show static info immediately while Guru loads
+    const staticInfo = info
       ? `THEME: ${info.theme}\n\n${info.description}\n\nOPPORTUNITIES\n${info.opportunities}\n\nWATCH FOR\n${info.watch}`
-      : `This is your ${dasha.planet} planetary period — a significant chapter shaping current life themes.`
-    );
+      : `This is your ${dasha.planet} planetary period.`;
+    setModalContent(staticInfo);
+    setModalLoading(true);
     setModalVisible(true);
+
+    try {
+      if (!user.birthData) throw new Error('No birth data');
+      const response = await askGuru(
+        `I'm currently ${dasha.isActive ? 'in' : (now > end ? 'past' : 'approaching')} my ${dasha.planet} Mahadasha (${start.getFullYear()}–${end.getFullYear()}, ${dasha.years} years). Give me a deeply personal reading of what this planetary period means specifically for me based on my chart. Cover: the core theme and energy of this period in my life; how it interacts with my specific planetary placements; what opportunities I should look for; what challenges to be mindful of; and practical advice for navigating this period well. Explain in simple, clear English without jargon.`,
+        [],
+        user.birthData,
+        user.chart
+      );
+      guruCacheRef.current[cacheKey] = response;
+      setModalContent(response);
+    } catch {
+      // Keep the static info already shown
+    } finally {
+      setModalLoading(false);
+    }
   };
 
-  const openYoga = (yoga: string) => {
+  const openYoga = async (yoga: string) => {
     if (!isPremium) { router.push('/paywall'); return; }
+    const cacheKey = `yoga-${yoga}`;
     setModalTitle(yoga);
     setModalSubtitle('Planetary combination in your chart');
-    setModalContent(YOGA_DESCRIPTIONS[yoga] ?? `${yoga} is a meaningful planetary combination present in your birth chart. Ask the Guru below to learn exactly how this applies to your life.`);
+
+    if (guruCacheRef.current[cacheKey]) {
+      setModalContent(guruCacheRef.current[cacheKey]);
+      setModalLoading(false);
+      setModalVisible(true);
+      return;
+    }
+
+    // Show static description while Guru loads
+    setModalContent(YOGA_DESCRIPTIONS[yoga] ?? `${yoga} is a meaningful planetary combination present in your birth chart.`);
+    setModalLoading(true);
     setModalVisible(true);
+
+    try {
+      if (!user.birthData) throw new Error('No birth data');
+      const response = await askGuru(
+        `I have ${yoga} in my birth chart. Give me a deeply personal reading of what this yoga means specifically for me based on my chart. Cover: what this yoga is and which planets form it in my chart; how it manifests in my personality, talents, and life path; what areas of life it most strongly influences; how my current Mahadasha period interacts with this yoga; and practical advice for making the most of this combination. Explain in simple, clear English without jargon.`,
+        [],
+        user.birthData,
+        user.chart
+      );
+      guruCacheRef.current[cacheKey] = response;
+      setModalContent(response);
+    } catch {
+      // Keep the static info already shown
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const openPlanet = async (p: any) => {
     if (!isPremium) { router.push('/paywall'); return; }
-    const cacheKey = `${p.planet}-${p.sign}-${p.house}`;
+    const cacheKey = `planet-${p.planet}-${p.sign}-${p.house}`;
     setModalTitle(`${p.planet} in ${p.sign}`);
     setModalSubtitle(`House ${p.house} · ${p.nakshatra} · ${p.isRetrograde ? 'Retrograde' : 'Direct'}`);
 
-    if (planetCacheRef.current[cacheKey]) {
-      setModalContent(planetCacheRef.current[cacheKey]);
+    if (guruCacheRef.current[cacheKey]) {
+      setModalContent(guruCacheRef.current[cacheKey]);
       setModalLoading(false);
       setModalVisible(true);
       return;
@@ -206,7 +261,7 @@ export default function ChartScreen() {
         user.birthData,
         user.chart
       );
-      planetCacheRef.current[cacheKey] = response;
+      guruCacheRef.current[cacheKey] = response;
       setModalContent(response);
     } catch {
       setModalContent(`Your ${p.planet} is placed in ${p.sign} in your ${p.house}th house. Ask the Guru below to get a personalised explanation of what this means for you.`);
