@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.uditvaid.nakshatra",
+      "bundleIdentifier": "app.nakshatra.vedic",
       "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "Nakshatra uses your camera to read your palm lines for Vedic palmistry analysis.",
@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#080B14"
       },
-      "package": "com.uditvaid.nakshatra",
+      "package": "app.nakshatra.vedic",
       "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
