@@ -112,7 +112,7 @@ export default function PaywallScreen() {
               }}
             >
               <View style={styles.tierLeft}>
-                <Text style={[styles.tierLabel, selectedTier === tier.key && styles.tierLabelSelected]}>
+                <Text style={[styles.tierLabel, selectedTier === tier.key && styles.tierLabelSelected]} numberOfLines={1}>
                   {tier.label}
                 </Text>
                 {'savings' in tier && tier.savings && (

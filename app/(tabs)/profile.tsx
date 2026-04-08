@@ -127,9 +127,9 @@ export default function ProfileScreen() {
                 <View style={styles.savedChartAvatar}>
                   <Text style={styles.savedChartAvatarText}>{chart.name[0]?.toUpperCase() ?? '?'}</Text>
                 </View>
-                <View>
-                  <Text style={styles.savedChartName}>{chart.name}</Text>
-                  <Text style={styles.savedChartRel}>{chart.relation}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.savedChartName} numberOfLines={1}>{chart.name}</Text>
+                  <Text style={styles.savedChartRel} numberOfLines={1}>{chart.relation}</Text>
                 </View>
               </View>
             ))}
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   accountList: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, overflow: 'hidden' },
   accountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   accountRowDanger: { borderBottomWidth: 0 },
-  accountRowText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star },
+  accountRowText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star, flex: 1 },
   accountRowArrow: { fontSize: 16, color: Colors.muted },
   version: { textAlign: 'center', fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginBottom: 8 },
 });

@@ -6,7 +6,7 @@ function TabIcon({ symbol, label, focused }: { symbol: string; label: string; fo
   return (
     <View style={styles.tabItem}>
       <Text style={[styles.icon, focused && styles.iconFocused]}>{symbol}</Text>
-      <Text style={[styles.label, focused && styles.labelFocused]}>{label}</Text>
+      <Text style={[styles.label, focused && styles.labelFocused]} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
@@ -82,11 +82,10 @@ const styles = StyleSheet.create({
   tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 4,
+    gap: 3,
   },
   icon: {
-    fontSize: 24,
+    fontSize: 22,
     opacity: 0.35,
     color: Colors.star,
   },
@@ -95,8 +94,8 @@ const styles = StyleSheet.create({
     color: Colors.gold,
   },
   label: {
-    fontSize: 10,
-    letterSpacing: 0.5,
+    fontSize: 9,
+    letterSpacing: 0.3,
     fontFamily: Fonts.cinzel,
     color: Colors.muted,
     opacity: 0.7,
