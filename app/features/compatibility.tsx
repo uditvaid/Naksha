@@ -8,6 +8,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { getCompatibilityReading } from '@services/claude';
+import { geocodePlace } from '@services/prokerala';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import type { BirthData } from '@store/userStore';
 
@@ -51,14 +52,20 @@ export default function CompatibilityScreen() {
     setLoading(true);
     setSaved(false);
 
+    const place = partnerPlace.trim() || 'Delhi';
+    let geo = { latitude: 28.6139, longitude: 77.2090, timezone: 'Asia/Kolkata' };
+    try {
+      geo = await geocodePlace(place);
+    } catch { /* use default */ }
+
     const partnerData: BirthData = {
       name: partnerName.trim(),
       dateOfBirth: formatDateISO(partnerDate),
       timeOfBirth: '12:00',
-      placeOfBirth: partnerPlace.trim() || 'Unknown',
-      latitude: 0,
-      longitude: 0,
-      timezone: 'UTC',
+      placeOfBirth: place,
+      latitude: geo.latitude,
+      longitude: geo.longitude,
+      timezone: geo.timezone,
     };
 
     try {

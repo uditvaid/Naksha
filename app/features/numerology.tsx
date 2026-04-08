@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { getNumerologyReading } from '@services/claude';
-import { calculateLifePathNumber, calculateDestinyNumber, calculateSoulUrge } from '@utils/vedic';
+import { calculateLifePathNumber, calculateDestinyNumber, calculateSoulUrge, calculatePersonalityNumber } from '@utils/vedic';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 
 const NUMBER_MEANINGS: Record<number, { title: string; traits: string }> = {
@@ -38,8 +38,12 @@ export default function NumerologyScreen() {
     const lifePathNumber = calculateLifePathNumber(user.birthData.dateOfBirth);
     const destinyNumber = calculateDestinyNumber(name);
     const soulUrgeNumber = calculateSoulUrge(name);
-    const birthdayNumber = new Date(user.birthData.dateOfBirth).getDate();
-    const personalityNumber = destinyNumber - soulUrgeNumber > 0 ? destinyNumber - soulUrgeNumber : 9;
+    const rawBirthday = new Date(user.birthData.dateOfBirth).getDate();
+    let birthdayNumber = rawBirthday;
+    while (birthdayNumber > 9 && birthdayNumber !== 11 && birthdayNumber !== 22) {
+      birthdayNumber = birthdayNumber.toString().split('').map(Number).reduce((a, b) => a + b, 0);
+    }
+    const personalityNumber = calculatePersonalityNumber(name);
 
     const nums = { lifePathNumber, destinyNumber, soulUrgeNumber, personalityNumber, birthdayNumber };
     setNumbers(nums);

@@ -125,6 +125,22 @@ export function calculateSoulUrge(name: string): number {
   return sum;
 }
 
+// Personality number from consonants (Pythagorean)
+export function calculatePersonalityNumber(name: string): number {
+  const VOWELS = 'aeiou';
+  const PYTHAGOREAN: Record<string, number> = {
+    a:1,b:2,c:3,d:4,e:5,f:6,g:7,h:8,i:9,j:1,k:2,l:3,m:4,
+    n:5,o:6,p:7,q:8,r:9,s:1,t:2,u:3,v:4,w:5,x:6,y:7,z:8,
+  };
+  const digits = name.toLowerCase().replace(/[^a-z]/g, '')
+    .split('').filter(c => !VOWELS.includes(c)).map(c => PYTHAGOREAN[c] ?? 0);
+  let sum = digits.reduce((a, b) => a + b, 0);
+  while (sum > 9 && sum !== 11 && sum !== 22 && sum !== 33) {
+    sum = sum.toString().split('').map(Number).reduce((a, b) => a + b, 0);
+  }
+  return sum;
+}
+
 // Chinese zodiac
 export function getChineseZodiac(year: number): { animal: string; element: string } {
   const ANIMALS = ['Rat','Ox','Tiger','Rabbit','Dragon','Snake','Horse','Goat','Monkey','Rooster','Dog','Pig'];
