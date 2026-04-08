@@ -281,22 +281,51 @@ export async function getCompatibilityReading(
   person1: { birthData: BirthData; chart: ChartData | null },
   person2: { birthData: BirthData; chart: ChartData | null }
 ): Promise<string> {
-  const getChartSummary = (chart: ChartData | null) => chart
-    ? `Lagna: ${chart.lagna}, Moon in ${chart.planets.find(p => p.planet === 'Moon')?.sign ?? 'Unknown'} · ${chart.planets.find(p => p.planet === 'Moon')?.nakshatra ?? ''} Nakshatra, Active Dasha: ${chart.dashas.find(d => d.isActive)?.planet ?? 'Unknown'}`
-    : 'Chart not yet calculated';
+  const getChartSummary = (bd: BirthData, chart: ChartData | null) => {
+    if (!chart) return `Born ${formatDate(bd.dateOfBirth)} at ${bd.timeOfBirth}, ${bd.placeOfBirth} (chart not calculated)`;
+    const moon = chart.planets?.find(p => p.planet === 'Moon');
+    const planets = chart.planets?.map(p => `${p.planet}: ${p.sign}, House ${p.house}${p.nakshatra ? `, ${p.nakshatra}` : ''}`).join('\n') ?? '';
+    return `Born ${formatDate(bd.dateOfBirth)} at ${bd.timeOfBirth}, ${bd.placeOfBirth}
+Lagna: ${chart.lagna}
+Moon: ${moon?.sign ?? 'Unknown'} · ${moon?.nakshatra ?? 'Unknown'} Nakshatra, pada ${moon?.pada ?? 1}
+Planets:\n${planets}
+Active Dasha: ${chart.dashas?.find(d => d.isActive)?.planet ?? 'Unknown'}
+Yogas: ${chart.yogas?.join(', ') || 'Standard placements'}`;
+  };
 
-  const system = `You are a warm, insightful guide helping people understand their relationships through the lens of astrology. Write in plain, simple English that anyone can understand. No jargon, no technical terms. Describe what things mean in real human terms — patterns, tendencies, emotional dynamics, shared values. Be honest but compassionate. No relationship is hopeless — every combination has gifts and challenges. Flowing prose only.`;
+  const system = `You are a warm, insightful guide helping people understand their relationships through Vedic compatibility analysis (Ashtakoota Milan).
+
+IMPORTANT: You MUST begin your response with the Ashtakoota compatibility score on its own line in this exact format:
+SCORE: X/36
+
+Calculate the Ashtakoota score based on the 8 Kootas (matching criteria) from both Moon Nakshatras:
+1. Varna (spiritual compatibility) — 1 point max
+2. Vashya (mutual attraction) — 2 points max
+3. Tara (destiny compatibility) — 3 points max
+4. Yoni (physical/sexual compatibility) — 4 points max
+5. Graha Maitri (mental compatibility) — 5 points max
+6. Gana (temperament) — 6 points max
+7. Bhakoot (love/wealth) — 7 points max
+8. Nadi (health/genes) — 8 points max
+
+Be as accurate as possible based on the Moon Nakshatra positions. After the score line, write in plain, warm English that anyone can understand. No jargon. Be honest but compassionate.`;
 
   return callClaude(system, [{
     role: 'user',
-    content: `Look at the compatibility between these two people.
+    content: `Analyze the Vedic compatibility between these two people using Ashtakoota Milan.
 
-${person1.birthData.name} — born ${formatDate(person1.birthData.dateOfBirth)}, ${person1.birthData.placeOfBirth}
-Their chart summary: ${getChartSummary(person1.chart)}
+═══ Person 1 ═══
+${person1.birthData.name}
+${getChartSummary(person1.birthData, person1.chart)}
 
-${person2.birthData.name} — born ${formatDate(person2.birthData.dateOfBirth)}, ${person2.birthData.placeOfBirth}
-Their chart summary: ${getChartSummary(person2.chart)}
+═══ Person 2 ═══
+${person2.birthData.name}
+${getChartSummary(person2.birthData, person2.chart)}
 
-Write in plain, warm English. Cover: what naturally works well between these two people and why; where they're likely to rub each other the wrong way and how to handle it; what they're each going through in their lives right now and how that affects the relationship; the things they're best placed to build or do together; and a closing reflection on what this relationship is here to teach both of them. Be honest, specific, and encouraging.`,
-  }], 1400);
+Start with the SCORE: X/36 line, then provide a brief breakdown of how they scored on each of the 8 Kootas (one line each, in plain English — what each means for their relationship).
+
+Then cover: what naturally draws these two together; their deepest compatibility strengths; areas that will need patience and understanding; how their current life phases (Mahadasha periods) affect the relationship right now; and practical advice for building a strong relationship together.
+
+Be honest, specific to their charts, and encouraging.`,
+  }], 1800);
 }

@@ -8,9 +8,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { getCompatibilityReading } from '@services/claude';
-import { geocodePlace } from '@services/prokerala';
+import { geocodePlace, generateChart } from '@services/prokerala';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
-import type { BirthData } from '@store/userStore';
+import type { BirthData, ChartData } from '@store/userStore';
 
 export default function CompatibilityScreen() {
   const user = useAppStore(s => s.user);
@@ -18,10 +18,14 @@ export default function CompatibilityScreen() {
 
   const [partnerName, setPartnerName] = useState('');
   const [partnerDate, setPartnerDate] = useState<Date>(new Date(1990, 0, 1));
+  const [partnerTime, setPartnerTime] = useState<Date>(new Date(1990, 0, 1, 12, 0));
   const [dateConfirmed, setDateConfirmed] = useState(false);
+  const [timeConfirmed, setTimeConfirmed] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [partnerPlace, setPartnerPlace] = useState('');
   const [reading, setReading] = useState('');
+  const [score, setScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -34,6 +38,15 @@ export default function CompatibilityScreen() {
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
+
+  const formatTime24 = (d: Date) => {
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+  const formatTimeDisplay = (d: Date) =>
+    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
   const analyze = async () => {
     if (!partnerName.trim()) {
@@ -51,6 +64,7 @@ export default function CompatibilityScreen() {
 
     setLoading(true);
     setSaved(false);
+    setScore(null);
 
     const place = partnerPlace.trim() || 'Delhi';
     let geo = { latitude: 28.6139, longitude: 77.2090, timezone: 'Asia/Kolkata' };
@@ -61,18 +75,29 @@ export default function CompatibilityScreen() {
     const partnerData: BirthData = {
       name: partnerName.trim(),
       dateOfBirth: formatDateISO(partnerDate),
-      timeOfBirth: '12:00',
+      timeOfBirth: timeConfirmed ? formatTime24(partnerTime) : '12:00',
       placeOfBirth: place,
       latitude: geo.latitude,
       longitude: geo.longitude,
       timezone: geo.timezone,
     };
 
+    // Generate partner's chart
+    let partnerChart: ChartData | null = null;
+    try {
+      partnerChart = await generateChart(partnerData);
+    } catch { /* proceed without chart */ }
+
     try {
       const result = await getCompatibilityReading(
         { birthData: user.birthData, chart: user.chart },
-        { birthData: partnerData, chart: null }
+        { birthData: partnerData, chart: partnerChart }
       );
+      // Extract score from response (Guru includes it as "SCORE: X/36")
+      const scoreMatch = result.match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*36/i);
+      if (scoreMatch) {
+        setScore(parseFloat(scoreMatch[1]));
+      }
       setReading(result);
     } catch {
       Alert.alert('Error', 'Unable to complete the analysis. Please check your connection and try again.');
@@ -207,6 +232,45 @@ export default function CompatibilityScreen() {
               </View>
             )}
 
+            {/* Time of birth */}
+            <Text style={styles.fieldLabel}>Time of Birth (for accurate chart)</Text>
+            <TouchableOpacity
+              style={[styles.datePickerBtn, timeConfirmed && styles.datePickerBtnFilled]}
+              onPress={() => setShowTimePicker(!showTimePicker)}
+            >
+              <Text style={[styles.datePickerText, !timeConfirmed && { color: Colors.muted }]}>
+                {timeConfirmed ? formatTimeDisplay(partnerTime) : 'Tap to select time'}
+              </Text>
+              <Text style={styles.datePickerIcon}>🕐</Text>
+            </TouchableOpacity>
+
+            {showTimePicker && (
+              <View style={styles.pickerWrap}>
+                <DateTimePicker
+                  value={partnerTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(_, time) => {
+                    if (time) {
+                      setPartnerTime(time);
+                      setTimeConfirmed(true);
+                    }
+                  }}
+                  textColor={Colors.star}
+                  themeVariant="dark"
+                />
+                <TouchableOpacity
+                  style={styles.confirmBtn}
+                  onPress={() => {
+                    setTimeConfirmed(true);
+                    setShowTimePicker(false);
+                  }}
+                >
+                  <Text style={styles.confirmBtnText}>Confirm Time ✦</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Place field */}
             <Text style={styles.fieldLabel}>Place of Birth (optional)</Text>
             <TextInput
@@ -236,6 +300,23 @@ export default function CompatibilityScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Score display */}
+          {score !== null && (
+            <View style={styles.scoreSection}>
+              <View style={styles.scoreCircle}>
+                <Text style={styles.scoreValue}>{score}</Text>
+                <Text style={styles.scoreTotal}>/36</Text>
+              </View>
+              <Text style={styles.scoreLabel}>ASHTAKOOTA SCORE</Text>
+              <Text style={styles.scoreDesc}>
+                {score >= 28 ? 'Excellent match — deep natural harmony'
+                  : score >= 21 ? 'Very good match — strong compatibility'
+                  : score >= 15 ? 'Good match — some areas need attention'
+                  : 'Challenging match — requires understanding and effort'}
+              </Text>
+            </View>
+          )}
+
           {/* Reading result */}
           {reading !== '' && (
             <View style={styles.readingSection}>
@@ -256,9 +337,12 @@ export default function CompatibilityScreen() {
                 style={styles.newReadingBtn}
                 onPress={() => {
                   setReading('');
+                  setScore(null);
                   setPartnerName('');
                   setPartnerDate(new Date(1990, 0, 1));
+                  setPartnerTime(new Date(1990, 0, 1, 12, 0));
                   setDateConfirmed(false);
+                  setTimeConfirmed(false);
                   setPartnerPlace('');
                   setSaved(false);
                 }}
@@ -342,6 +426,14 @@ const styles = StyleSheet.create({
   },
   analyzeBtnDisabled: { opacity: 0.4 },
   analyzeBtnText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5 },
+
+  // Score
+  scoreSection: { alignItems: 'center', marginHorizontal: Spacing.md, marginBottom: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.xl, padding: Spacing.lg },
+  scoreCircle: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 },
+  scoreValue: { fontSize: 48, fontFamily: Fonts.cinzel, color: Colors.gold },
+  scoreTotal: { fontSize: 20, fontFamily: Fonts.cinzel, color: Colors.muted, marginLeft: 2 },
+  scoreLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 6 },
+  scoreDesc: { fontSize: 13, color: Colors.star, fontFamily: Fonts.cormorantItalic, textAlign: 'center' },
 
   // Reading
   readingSection: { marginHorizontal: Spacing.md, marginBottom: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.md },
