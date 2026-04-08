@@ -142,12 +142,12 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>QUICK ACCESS</Text>
           <View style={styles.quickGrid}>
-            <QuickAction icon="🖐" label="Palm Reading" onPress={() => router.push('/features/palm')} locked={!isPremium} />
-            <QuickAction icon="∑" label="Numerology" onPress={() => router.push('/features/numerology')} locked={false} />
-            <QuickAction icon="☯" label="Chinese Chart" onPress={() => router.push('/features/chinese')} locked={!isPremium} />
-            <QuickAction icon="📖" label="Lal Kitab" onPress={() => router.push('/features/lalkitab')} locked={!isPremium} />
-            <QuickAction icon="♡" label="Compatibility" onPress={() => router.push('/features/compatibility')} locked={false} />
-            <QuickAction icon="✦" label="Ask Guru" onPress={() => router.push('/(tabs)/guru')} locked={false} />
+            <QuickAction icon="🖐" label="Palm Reading" color="#E8C96A" onPress={() => router.push('/features/palm')} locked={!isPremium} />
+            <QuickAction icon="∑" label="Numerology" color="#A78BFA" onPress={() => router.push('/features/numerology')} locked={false} />
+            <QuickAction icon="☯" label="Chinese Chart" color="#F87171" onPress={() => router.push('/features/chinese')} locked={!isPremium} />
+            <QuickAction icon="📖" label="Lal Kitab" color="#34D399" onPress={() => router.push('/features/lalkitab')} locked={!isPremium} />
+            <QuickAction icon="♡" label="Compatibility" color="#FB7185" onPress={() => router.push('/features/compatibility')} locked={false} />
+            <QuickAction icon="🔱" label="Ask Guru" color="#E8C96A" onPress={() => router.push('/(tabs)/guru')} locked={false} />
           </View>
         </View>
 
@@ -185,11 +185,13 @@ const StatCard = memo(function StatCard({ label, value, sub }: { label: string; 
   );
 });
 
-const QuickAction = memo(function QuickAction({ icon, label, onPress, locked }: { icon: string; label: string; onPress: () => void; locked: boolean }) {
+const QuickAction = memo(function QuickAction({ icon, label, color, onPress, locked }: { icon: string; label: string; color: string; onPress: () => void; locked: boolean }) {
   return (
     <TouchableOpacity style={styles.quickAction} onPress={onPress}>
-      <Text style={styles.quickIcon}>{icon}</Text>
-      <Text style={styles.quickLabel}>{label}</Text>
+      <View style={[styles.quickIconWrap, { backgroundColor: color + '18' }]}>
+        <Text style={styles.quickIcon}>{icon}</Text>
+      </View>
+      <Text style={[styles.quickLabel, { color: color }]}>{label}</Text>
       {locked && <Text style={styles.lockBadge}>✦</Text>}
     </TouchableOpacity>
   );
@@ -236,8 +238,9 @@ const styles = StyleSheet.create({
   nakshatra: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cormorantItalic },
   pada: { fontSize: 10, color: Colors.muted, marginTop: 1 },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  quickAction: { width: '30%', aspectRatio: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', gap: 6, position: 'relative' },
-  quickIcon: { fontSize: 22 },
-  quickLabel: { fontSize: 9, fontFamily: Fonts.cinzel, color: Colors.muted, letterSpacing: 0.5, textAlign: 'center' },
+  quickAction: { width: '30%', aspectRatio: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', gap: 8, position: 'relative' },
+  quickIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  quickIcon: { fontSize: 26 },
+  quickLabel: { fontSize: 9, fontFamily: Fonts.cinzel, letterSpacing: 0.5, textAlign: 'center' },
   lockBadge: { position: 'absolute', top: 6, right: 8, fontSize: 8, color: Colors.gold },
 });
