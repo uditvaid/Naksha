@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, memo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -8,35 +8,41 @@ import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { PLANETS } from '@constants/astrology';
 
 export default function HomeScreen() {
-  const user = useAppStore(s => s.user);
+  const birthData = useAppStore(s => s.user.birthData);
+  const chart = useAppStore(s => s.user.chart);
+  const isPremium = useAppStore(s => s.user.isPremium);
   const [dailyReading, setDailyReading] = useState('');
   const [loadingReading, setLoadingReading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const cachedDateRef = useRef<string | null>(null);
 
-  const planets = user.chart?.planets ?? [];
-  const activeDasha = user.chart?.dashas?.find(d => d.isActive);
-  const name = user.birthData?.name ?? 'Seeker';
+  const planets = chart?.planets ?? [];
+  const activeDasha = chart?.dashas?.find(d => d.isActive);
+  const name = birthData?.name ?? 'Seeker';
   const firstName = name.split(' ')[0] ?? name;
 
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const fetchDailyReading = useCallback(async () => {
-    if (!user.birthData) return;
+  const fetchDailyReading = useCallback(async (force = false) => {
+    if (!birthData) return;
+    const todayKey = new Date().toDateString();
+    if (!force && cachedDateRef.current === todayKey && dailyReading) return;
     setLoadingReading(true);
     try {
-      const reading = await getDailyReading(user.birthData, user.chart);
+      const reading = await getDailyReading(birthData, chart);
       setDailyReading(reading);
+      cachedDateRef.current = todayKey;
     } catch (e) {
       setDailyReading('The cosmic signal is momentarily unclear. Try again shortly.');
     } finally {
       setLoadingReading(false);
     }
-  }, [user.birthData, user.chart]);
+  }, [birthData, chart]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchDailyReading();
+    await fetchDailyReading(true);
     setRefreshing(false);
   };
 
@@ -62,7 +68,7 @@ export default function HomeScreen() {
             <Text style={styles.name}>{firstName}</Text>
             <Text style={styles.date}>{dateStr}</Text>
           </View>
-          {!user.isPremium && (
+          {!isPremium && (
             <TouchableOpacity style={styles.premiumBadge} onPress={() => router.push('/paywall')}>
               <Text style={styles.premiumBadgeText}>✦ GO PREMIUM</Text>
             </TouchableOpacity>
@@ -71,10 +77,10 @@ export default function HomeScreen() {
 
         {/* Mandala Hero */}
         <View style={styles.mandalaSection}>
-          <MandalaWheel lagna={user.chart?.lagna ?? 'Libra'} />
-          {user.chart && (
+          <MandalaWheel lagna={chart?.lagna ?? 'Libra'} />
+          {chart && (
             <View style={styles.lagnaInfo}>
-              <Text style={styles.lagnaSign}>{user.chart.lagna}</Text>
+              <Text style={styles.lagnaSign}>{chart.lagna}</Text>
               <Text style={styles.lagnaLabel}>LAGNA (ASCENDANT)</Text>
             </View>
           )}
@@ -99,7 +105,7 @@ export default function HomeScreen() {
             ) : (
               <>
                 <Text style={styles.readingText}>{dailyReading || 'Tap refresh to receive your daily cosmic reading.'}</Text>
-                <TouchableOpacity style={styles.refreshBtn} onPress={fetchDailyReading}>
+                <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchDailyReading(true)}>
                   <Text style={styles.refreshBtnText}>↻ Refresh Reading</Text>
                 </TouchableOpacity>
               </>
@@ -136,10 +142,10 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>QUICK ACCESS</Text>
           <View style={styles.quickGrid}>
-            <QuickAction icon="🖐" label="Palm Reading" onPress={() => router.push('/features/palm')} locked={!user.isPremium} />
+            <QuickAction icon="🖐" label="Palm Reading" onPress={() => router.push('/features/palm')} locked={!isPremium} />
             <QuickAction icon="∑" label="Numerology" onPress={() => router.push('/features/numerology')} locked={false} />
-            <QuickAction icon="☯" label="Chinese Chart" onPress={() => router.push('/features/chinese')} locked={!user.isPremium} />
-            <QuickAction icon="📖" label="Lal Kitab" onPress={() => router.push('/features/lalkitab')} locked={!user.isPremium} />
+            <QuickAction icon="☯" label="Chinese Chart" onPress={() => router.push('/features/chinese')} locked={!isPremium} />
+            <QuickAction icon="📖" label="Lal Kitab" onPress={() => router.push('/features/lalkitab')} locked={!isPremium} />
             <QuickAction icon="♡" label="Compatibility" onPress={() => router.push('/features/compatibility')} locked={false} />
             <QuickAction icon="✦" label="Ask Guru" onPress={() => router.push('/(tabs)/guru')} locked={false} />
           </View>
@@ -151,7 +157,7 @@ export default function HomeScreen() {
   );
 }
 
-function MandalaWheel({ lagna }: { lagna: string }) {
+const MandalaWheel = memo(function MandalaWheel({ lagna }: { lagna: string }) {
   const SIGN_SYMBOLS: Record<string, string> = {
     Aries: '♈', Taurus: '♉', Gemini: '♊', Cancer: '♋',
     Leo: '♌', Virgo: '♍', Libra: '♎', Scorpio: '♏',
@@ -167,9 +173,9 @@ function MandalaWheel({ lagna }: { lagna: string }) {
       </View>
     </View>
   );
-}
+});
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
+const StatCard = memo(function StatCard({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <View style={styles.statCard}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -177,9 +183,9 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub: st
       <Text style={styles.statSub}>{sub}</Text>
     </View>
   );
-}
+});
 
-function QuickAction({ icon, label, onPress, locked }: { icon: string; label: string; onPress: () => void; locked: boolean }) {
+const QuickAction = memo(function QuickAction({ icon, label, onPress, locked }: { icon: string; label: string; onPress: () => void; locked: boolean }) {
   return (
     <TouchableOpacity style={styles.quickAction} onPress={onPress}>
       <Text style={styles.quickIcon}>{icon}</Text>
@@ -187,7 +193,7 @@ function QuickAction({ icon, label, onPress, locked }: { icon: string; label: st
       {locked && <Text style={styles.lockBadge}>✦</Text>}
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.midnight },

@@ -232,31 +232,23 @@ export async function generateChart(birthData: BirthData): Promise<ChartData> {
     planets = buildFallbackPlanets(lagnaSignIndex, birthData);
   }
 
-  // Dasha periods
-  let dashas: DashaPeriod[] = [];
-  try {
-    const dashaData = await prokeralaGet('dasha-periods', baseParams);
-    dashas = parseDashas(dashaData?.dasha_periods ?? dashaData?.mahadasha ?? []);
-  } catch {
-    dashas = buildFallbackDashas(planets, birthData);
-  }
+  // Fetch dashas, yogas, and navamsha in parallel
+  const [dashaResult, yogaResult, navResult] = await Promise.all([
+    prokeralaGet('dasha-periods', baseParams).catch(() => null),
+    prokeralaGet('yoga', baseParams).catch(() => null),
+    prokeralaGet('kundli', { ...baseParams, chart_type: 'navamsa' }).catch(() => null),
+  ]);
 
-  // Yogas
-  let yogas: string[] = [];
-  try {
-    const yogaData = await prokeralaGet('yoga', baseParams);
-    yogas = (yogaData?.yoga_list ?? []).slice(0, 8).map((y: any) => y.name ?? y);
-  } catch {
-    yogas = detectBasicYogas(planets);
-  }
+  const dashas = dashaResult
+    ? parseDashas(dashaResult.dasha_periods ?? dashaResult.mahadasha ?? [])
+    : buildFallbackDashas(planets, birthData);
 
-  // Navamsha lagna
-  let navamshaLagna = lagna;
-  try {
-    const navData = await prokeralaGet('kundli', { ...baseParams, chart_type: 'navamsa' });
-    const navIdx = (navData?.ascendant?.rasi?.id ?? lagnaSignIndex + 1) - 1;
-    navamshaLagna = SIGNS[navIdx] ?? lagna;
-  } catch { /* use default */ }
+  const yogas = yogaResult
+    ? (yogaResult.yoga_list ?? []).slice(0, 8).map((y: any) => y.name ?? y)
+    : detectBasicYogas(planets);
+
+  const navIdx = navResult ? (navResult.ascendant?.rasi?.id ?? lagnaSignIndex + 1) - 1 : lagnaSignIndex;
+  const navamshaLagna = SIGNS[navIdx] ?? lagna;
 
   return { lagna, lagnaSign: lagnaSignIndex, planets, dashas, yogas, navamshaLagna };
 }

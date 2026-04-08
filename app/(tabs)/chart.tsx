@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, memo, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Modal, ActivityIndicator, SafeAreaView as RNSafeAreaView,
@@ -16,7 +16,7 @@ const CHART_SIZE = width - 40;
 
 // ─── North Indian Chart ───────────────────────────────────────────────────────
 
-function NorthIndianChart({ planets }: { planets: any[] }) {
+const NorthIndianChart = memo(function NorthIndianChart({ planets }: { planets: any[] }) {
   const S = CHART_SIZE;
   const planetsByHouse: Record<number, string[]> = {};
   planets.forEach(p => {
@@ -68,7 +68,7 @@ function NorthIndianChart({ planets }: { planets: any[] }) {
       })}
     </Svg>
   );
-}
+});
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 
@@ -157,6 +157,7 @@ export default function ChartScreen() {
   const yogas = user.chart?.yogas ?? [];
   const now = new Date();
   const isPremium = user.isPremium;
+  const planetCacheRef = useRef<Record<string, string>>({});
 
   const openDasha = (dasha: any) => {
     if (!isPremium) { router.push('/paywall'); return; }
@@ -182,9 +183,17 @@ export default function ChartScreen() {
 
   const openPlanet = async (p: any) => {
     if (!isPremium) { router.push('/paywall'); return; }
-    const planetData = PLANETS.find(pl => pl.id === p.planet.toLowerCase());
+    const cacheKey = `${p.planet}-${p.sign}-${p.house}`;
     setModalTitle(`${p.planet} in ${p.sign}`);
     setModalSubtitle(`House ${p.house} · ${p.nakshatra} · ${p.isRetrograde ? 'Retrograde' : 'Direct'}`);
+
+    if (planetCacheRef.current[cacheKey]) {
+      setModalContent(planetCacheRef.current[cacheKey]);
+      setModalLoading(false);
+      setModalVisible(true);
+      return;
+    }
+
     setModalContent('');
     setModalLoading(true);
     setModalVisible(true);
@@ -197,6 +206,7 @@ export default function ChartScreen() {
         user.birthData,
         user.chart
       );
+      planetCacheRef.current[cacheKey] = response;
       setModalContent(response);
     } catch {
       setModalContent(`Your ${p.planet} is placed in ${p.sign} in your ${p.house}th house. Ask the Guru below to get a personalised explanation of what this means for you.`);

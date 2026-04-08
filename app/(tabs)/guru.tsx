@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, memo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -22,7 +22,11 @@ const SUGGESTED_QUESTIONS = [
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export default function GuruScreen() {
-  const user = useAppStore(s => s.user);
+  const birthData = useAppStore(s => s.user.birthData);
+  const chart = useAppStore(s => s.user.chart);
+  const isPremium = useAppStore(s => s.user.isPremium);
+  const guruQuestionsToday = useAppStore(s => s.user.guruQuestionsToday);
+  const lastGuruDate = useAppStore(s => s.user.lastGuruDate);
   const messages = useAppStore(s => s.guruMessages);
   const addMessage = useAppStore(s => s.addGuruMessage);
   const incrementQuestions = useAppStore(s => s.incrementGuruQuestions);
@@ -34,15 +38,15 @@ export default function GuruScreen() {
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const questionsLeft = user.isPremium
+  const questionsLeft = isPremium
     ? '∞'
-    : Math.max(0, FREE_GURU_QUESTIONS_PER_DAY - (user.lastGuruDate === new Date().toDateString() ? user.guruQuestionsToday : 0));
+    : Math.max(0, FREE_GURU_QUESTIONS_PER_DAY - (lastGuruDate === new Date().toDateString() ? guruQuestionsToday : 0));
 
   const sendMessage = useCallback(async (text?: string) => {
     const question = (text ?? input).trim();
     if (!question || loading) return;
 
-    if (!user.birthData) {
+    if (!birthData) {
       router.push('/onboarding');
       return;
     }
@@ -68,15 +72,15 @@ export default function GuruScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const response = await askGuru(question, messages, user.birthData, user.chart);
-      incrementQuestions(); // only count if API call succeeds
+      const currentMessages = useAppStore.getState().guruMessages;
+      const response = await askGuru(question, currentMessages, birthData, chart);
+      incrementQuestions();
       addMessage({
         id: genId(),
         role: 'assistant',
         content: response,
         timestamp: new Date().toISOString(),
       });
-      // Auto-save the exchange
       saveReading({
         type: 'guru',
         title: question.slice(0, 50) + (question.length > 50 ? '…' : ''),
@@ -95,7 +99,7 @@ export default function GuruScreen() {
       setLoading(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
     }
-  }, [input, loading, user, messages, canAsk]);
+  }, [input, loading, birthData, chart, canAsk]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -107,7 +111,7 @@ export default function GuruScreen() {
             <Text style={styles.subtitle}>Your personal Vedic guide</Text>
           </View>
           <View style={styles.headerRight}>
-            {!user.isPremium && (
+            {!isPremium && (
               <View style={styles.questionCount}>
                 <Text style={styles.questionCountText}>{questionsLeft} left today</Text>
               </View>
@@ -143,7 +147,7 @@ export default function GuruScreen() {
         </ScrollView>
 
         {/* Paywall nudge */}
-        {!user.isPremium && questionsLeft === 0 && (
+        {!isPremium && questionsLeft === 0 && (
           <TouchableOpacity style={styles.paywallNudge} onPress={() => router.push('/paywall')}>
             <Text style={styles.paywallNudgeText}>✦ Unlock unlimited Guru conversations with Premium</Text>
           </TouchableOpacity>
@@ -196,7 +200,7 @@ function WelcomeState({ onSelect }: { onSelect: (q: string) => void }) {
   );
 }
 
-function MessageBubble({ message }: { message: any }) {
+const MessageBubble = memo(function MessageBubble({ message }: { message: any }) {
   const isUser = message.role === 'user';
   return (
     <View style={[styles.bubble, isUser ? styles.userBubble : styles.guroBubble]}>
@@ -207,7 +211,7 @@ function MessageBubble({ message }: { message: any }) {
       </Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.midnight },
