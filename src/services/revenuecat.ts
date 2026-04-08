@@ -7,7 +7,7 @@ const IOS_API_KEY = REVENUECAT_IOS_KEY;
 const ANDROID_API_KEY = REVENUECAT_ANDROID_KEY;
 
 export async function initRevenueCat(userId?: string): Promise<void> {
-  Purchases.setLogLevel(LOG_LEVEL.VERBOSE); // remove before production release
+  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.ERROR);
 
   const apiKey = Platform.OS === 'ios' ? IOS_API_KEY : ANDROID_API_KEY;
   Purchases.configure({ apiKey, appUserID: userId });

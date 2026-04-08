@@ -38,8 +38,14 @@ async function callClaude(
   });
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message ?? 'Service temporarily unavailable. Please try again.');
+    let errMessage = 'Service temporarily unavailable. Please try again.';
+    if (response.status === 401) errMessage = 'API authentication failed. Please check configuration.';
+    else if (response.status === 429) errMessage = 'Too many requests. Please wait a moment and try again.';
+    try {
+      const err = await response.json();
+      if (err.error?.message) errMessage = err.error.message;
+    } catch { /* response wasn't JSON */ }
+    throw new Error(errMessage);
   }
 
   const data = await response.json();

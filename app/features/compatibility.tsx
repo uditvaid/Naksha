@@ -301,6 +301,11 @@ export default function CompatibilityScreen() {
           </View>
 
           {/* Score display */}
+          {reading !== '' && score === null && (
+            <View style={styles.scoreSection}>
+              <Text style={styles.scoreDesc}>Ashtakoota score not available — see reading below for compatibility insights.</Text>
+            </View>
+          )}
           {score !== null && (
             <View style={styles.scoreSection}>
               <View style={styles.scoreCircle}>

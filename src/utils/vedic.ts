@@ -27,7 +27,7 @@ export function degreeToSign(degree: number): { sign: string; signIndex: number;
 }
 
 export function degreeToNakshatra(degree: number): { nakshatra: string; pada: number } {
-  const nakshatraIndex = Math.floor(degree / (360 / 27));
+  const nakshatraIndex = Math.floor(((degree % 360) + 360) % 360 / (360 / 27));
   const nakshatra = NAKSHATRAS[nakshatraIndex] ?? NAKSHATRAS[0];
   const positionInNakshatra = degree % (360 / 27);
   const pada = Math.floor(positionInNakshatra / (360 / 108)) + 1;
