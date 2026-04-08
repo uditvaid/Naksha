@@ -1,5 +1,5 @@
 /**
- * Nakshatra AI Service
+ * Naksha AI Service
  *
  * Readings grounded in:
  * - Brihat Parashara Hora Shastra, Brihat Jataka, Phaladeepika, Saravali

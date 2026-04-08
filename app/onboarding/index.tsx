@@ -140,7 +140,7 @@ export default function OnboardingScreen() {
         <View style={[styles.stepPage, { width }]}>
           <View style={styles.welcomeContent}>
             <Text style={styles.welcomeOm}>ॐ</Text>
-            <Text style={styles.welcomeTitle}>Nakshatra</Text>
+            <Text style={styles.welcomeTitle}>Naksha</Text>
             <Text style={styles.welcomeTagline}>Your Complete Cosmic Blueprint</Text>
             <Text style={styles.welcomeDesc}>
               Vedic astrology · Chinese BaZi · Numerology · Palmistry · Lal Kitab{'\n\n'}

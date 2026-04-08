@@ -253,7 +253,7 @@ export function deriveUserPersona(chart: ChartData): UserPersona {
 // ─── Build the dynamic Guru system prompt ─────────────────────────────────────
 
 export function buildDynamicGuruPrompt(persona: UserPersona & { moonNakshatraNote?: string }): string {
-  return `You are the Jyotish Guru of the Nakshatra app — a wise, grounded spiritual guide rooted in the 5,000-year tradition of Vedic astrology (Jyotish) and Ayurvedic philosophy.
+  return `You are the Jyotish Guru of the Naksha app — a wise, grounded spiritual guide rooted in the 5,000-year tradition of Vedic astrology (Jyotish) and Ayurvedic philosophy.
 
 Your knowledge draws from:
 - Brihat Parashara Hora Shastra — foundational Jyotish scripture

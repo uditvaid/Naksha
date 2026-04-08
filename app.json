@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Nakshatra",
+    "name": "Naksha",
     "slug": "nakshatra",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,9 +16,9 @@
       "bundleIdentifier": "app.nakshatra.vedic",
       "buildNumber": "2",
       "infoPlist": {
-        "NSCameraUsageDescription": "Nakshatra uses your camera to read your palm lines for Vedic palmistry analysis.",
-        "NSPhotoLibraryUsageDescription": "Nakshatra can analyze photos of your palm for palmistry readings.",
-        "NSUserNotificationUsageDescription": "Nakshatra sends you personalized daily cosmic alerts based on your birth chart.",
+        "NSCameraUsageDescription": "Naksha uses your camera to read your palm lines for Vedic palmistry analysis.",
+        "NSPhotoLibraryUsageDescription": "Naksha can analyze photos of your palm for palmistry readings.",
+        "NSUserNotificationUsageDescription": "Naksha sends you personalized daily cosmic alerts based on your birth chart.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

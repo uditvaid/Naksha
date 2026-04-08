@@ -187,7 +187,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text style={styles.version}>Nakshatra v1.0.0 · Made with ॐ</Text>
+        <Text style={styles.version}>Naksha v1.0.0 · Made with ॐ</Text>
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>

@@ -82,7 +82,7 @@ export default function PaywallScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           <Text style={styles.heroIcon}>✦</Text>
-          <Text style={styles.heroTitle}>Nakshatra Premium</Text>
+          <Text style={styles.heroTitle}>Naksha Premium</Text>
           <Text style={styles.heroSub}>
             Unlock your complete cosmic blueprint — all systems, all insights, unlimited guidance.
           </Text>

@@ -76,7 +76,7 @@ export async function geocodePlace(place: string): Promise<GeoResult> {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(place)}&format=json&limit=1`,
-      { headers: { 'User-Agent': 'NakshatraApp/1.0' } }
+      { headers: { 'User-Agent': 'NakshaApp/1.0' } }
     );
     const results = await res.json();
     if (!results.length) throw new Error('Location not found');
