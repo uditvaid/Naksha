@@ -29,6 +29,28 @@ export default function CompatibilityScreen() {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  if (!user.isPremium) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+          <Text style={{ fontSize: 48 }}>♡</Text>
+          <Text style={{ fontSize: 22, fontFamily: Fonts.cinzel, color: Colors.gold, textAlign: 'center' }}>Compatibility</Text>
+          <Text style={{ fontSize: 14, color: Colors.muted, fontFamily: Fonts.crimson, textAlign: 'center', lineHeight: 22 }}>
+            Discover your Ashtakoota compatibility score out of 36 — a deep Vedic analysis of how your charts align across love, temperament, and destiny.
+          </Text>
+          <TouchableOpacity style={{ backgroundColor: Colors.gold, borderRadius: 16, paddingHorizontal: 24, paddingVertical: 14, marginTop: 8 }} onPress={() => router.push('/paywall')}>
+            <Text style={{ fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight }}>✦ Unlock with Premium</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const formatDateDisplay = (d: Date) =>
     d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 

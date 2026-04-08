@@ -142,11 +142,11 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>QUICK ACCESS</Text>
           <View style={styles.quickGrid}>
-            <QuickAction icon="🖐" label="Palm Reading" color="#E8C96A" onPress={() => router.push('/features/palm')} locked={!isPremium} />
-            <QuickAction icon="∑" label="Numerology" color="#A78BFA" onPress={() => router.push('/features/numerology')} locked={false} />
-            <QuickAction icon="☯" label="Chinese Chart" color="#F87171" onPress={() => router.push('/features/chinese')} locked={!isPremium} />
-            <QuickAction icon="📖" label="Lal Kitab" color="#34D399" onPress={() => router.push('/features/lalkitab')} locked={!isPremium} />
-            <QuickAction icon="♡" label="Compatibility" color="#FB7185" onPress={() => router.push('/features/compatibility')} locked={false} />
+            <QuickAction icon="🖐" label="Palm Reading" color="#E8C96A" onPress={() => isPremium ? router.push('/features/palm') : router.push('/paywall')} locked={!isPremium} />
+            <QuickAction icon="∑" label="Numerology" color="#A78BFA" onPress={() => isPremium ? router.push('/features/numerology') : router.push('/paywall')} locked={!isPremium} />
+            <QuickAction icon="☯" label="Chinese Chart" color="#F87171" onPress={() => isPremium ? router.push('/features/chinese') : router.push('/paywall')} locked={!isPremium} />
+            <QuickAction icon="📖" label="Lal Kitab" color="#34D399" onPress={() => isPremium ? router.push('/features/lalkitab') : router.push('/paywall')} locked={!isPremium} />
+            <QuickAction icon="♡" label="Compatibility" color="#FB7185" onPress={() => isPremium ? router.push('/features/compatibility') : router.push('/paywall')} locked={!isPremium} />
             <QuickAction icon="🔱" label="Ask Guru" color="#E8C96A" onPress={() => router.push('/(tabs)/guru')} locked={false} />
           </View>
         </View>

@@ -31,6 +31,28 @@ export default function NumerologyScreen() {
   const [numbers, setNumbers] = useState<Record<string, number> | null>(null);
   const [saved, setSaved] = useState(false);
 
+  if (!user.isPremium) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 }}>
+          <Text style={{ fontSize: 48 }}>∑</Text>
+          <Text style={{ fontSize: 22, fontFamily: Fonts.cinzel, color: Colors.gold, textAlign: 'center' }}>Numerology</Text>
+          <Text style={{ fontSize: 14, color: Colors.muted, fontFamily: Fonts.crimson, textAlign: 'center', lineHeight: 22 }}>
+            Discover your life path, destiny, and soul urge numbers through Vedic and Pythagorean numerology — personalized to your name and birth date.
+          </Text>
+          <TouchableOpacity style={{ backgroundColor: Colors.gold, borderRadius: 16, paddingHorizontal: 24, paddingVertical: 14, marginTop: 8 }} onPress={() => router.push('/paywall')}>
+            <Text style={{ fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight }}>✦ Unlock with Premium</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const calculate = async () => {
     if (!name.trim() || !user.birthData) return;
     setLoading(true);
