@@ -194,7 +194,7 @@ function WelcomeState({ onSelect }: { onSelect: (q: string) => void }) {
         </TouchableOpacity>
       ))}
       <Text style={styles.disclaimer}>
-        Readings draw from Brihat Parashara Hora Shastra, Phaladeepika, and classical Jyotish tradition. They are for spiritual self-inquiry only and do not constitute medical, legal, or financial advice.
+        All responses are AI-generated using classical Vedic texts as context. Readings are for spiritual self-inquiry and entertainment only — they do not constitute medical, legal, or financial advice.
       </Text>
     </View>
   );
@@ -204,7 +204,7 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: any })
   const isUser = message.role === 'user';
   return (
     <View style={[styles.bubble, isUser ? styles.userBubble : styles.guroBubble]}>
-      {!isUser && <Text style={styles.guruLabel}>✦ GURU</Text>}
+      {!isUser && <Text style={styles.guruLabel}>✦ GURU · AI-GENERATED</Text>}
       <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>{message.content}</Text>
       <Text style={styles.timestamp}>
         {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

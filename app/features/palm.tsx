@@ -36,19 +36,34 @@ export default function PalmScreen() {
   }
 
   const pickImage = async (fromCamera: boolean) => {
-    const method = fromCamera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
-    const result = await method({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      base64: true,
-      allowsEditing: true,
-      aspect: [3, 4],
-    });
+    try {
+      if (fromCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Camera Permission Required',
+            'Please enable camera access in your device settings to take a photo of your palm.',
+          );
+          return;
+        }
+      }
 
-    if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
-      setImageBase64(result.assets[0].base64 ?? null);
-      setReading('');
+      const method = fromCamera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+      const result = await method({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        base64: true,
+        allowsEditing: true,
+        aspect: [3, 4],
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setImageUri(result.assets[0].uri);
+        setImageBase64(result.assets[0].base64 ?? null);
+        setReading('');
+      }
+    } catch {
+      Alert.alert('Error', 'Could not open the camera or photo library. Please check your permissions and try again.');
     }
   };
 
@@ -143,7 +158,7 @@ export default function PalmScreen() {
         {/* Reading result */}
         {reading !== '' && (
           <View style={styles.readingCard}>
-            <Text style={styles.readingLabel}>✦ YOUR PALM READING ✦</Text>
+            <Text style={styles.readingLabel}>✦ YOUR PALM READING ✦{'\n'}AI-Generated Analysis</Text>
             <Text style={styles.readingText}>{reading}</Text>
             <TouchableOpacity style={styles.newReadingBtn} onPress={() => { setReading(''); setImageUri(null); }}>
               <Text style={styles.newReadingBtnText}>Read Another Hand</Text>

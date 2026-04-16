@@ -28,10 +28,10 @@ export default function PaywallScreen() {
 
   const handlePurchase = async () => {
     if (!selectedPkg) {
-      // Demo mode — just grant premium
-      setPremium(true);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      Alert.alert(
+        'Unable to Connect',
+        'Could not connect to the App Store. Please check your internet connection and try again.',
+      );
       return;
     }
 
@@ -123,7 +123,11 @@ export default function PaywallScreen() {
               </View>
               <View style={styles.tierRight}>
                 <Text style={[styles.tierPrice, selectedTier === tier.key && styles.tierPriceSelected]}>
-                  {tier.price}
+                  {(() => {
+                    const id = tier.key === 'annual' ? 'yearly' : tier.key;
+                    const pkg = packages.find(p => p.identifier.includes(id));
+                    return pkg?.product?.priceString ?? tier.price;
+                  })()}
                 </Text>
                 <Text style={styles.tierPeriod}>/{tier.period}</Text>
               </View>
@@ -161,7 +165,10 @@ export default function PaywallScreen() {
           </TouchableOpacity>
 
           <Text style={styles.legal}>
-            Subscriptions auto-renew until cancelled. Cancel anytime in App Store Settings. By purchasing you agree to our Terms of Service and Privacy Policy.
+            Payment will be charged to your App Store account at confirmation of purchase. Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period. Cancel anytime in App Store Settings. By purchasing you agree to our{' '}
+            <Text style={styles.legalLink} onPress={() => router.push('/legal/terms')}>Terms of Service</Text>
+            {' '}and{' '}
+            <Text style={styles.legalLink} onPress={() => router.push('/legal/privacy')}>Privacy Policy</Text>.
           </Text>
         </View>
 
@@ -204,4 +211,5 @@ const styles = StyleSheet.create({
   restoreBtn: { alignItems: 'center', paddingVertical: 12 },
   restoreBtnText: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },
   legal: { fontSize: 10, color: Colors.mutedDark, textAlign: 'center', lineHeight: 15, marginTop: Spacing.sm, fontFamily: Fonts.crimson },
+  legalLink: { color: Colors.gold, textDecorationLine: 'underline' },
 });

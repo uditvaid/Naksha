@@ -148,7 +148,7 @@ export function getChineseZodiac(year: number): { animal: string; element: strin
   const STEMS = ['Yang Metal','Yin Metal','Yang Water','Yin Water','Yang Wood','Yin Wood','Yang Fire','Yin Fire','Yang Earth','Yin Earth'];
 
   const animalIndex = (year - 4) % 12;
-  const stemIndex = (year - 4) % 10;
+  const stemIndex = year % 10;
 
   return {
     animal: ANIMALS[((animalIndex % 12) + 12) % 12] ?? 'Rat',

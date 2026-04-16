@@ -138,7 +138,7 @@ export default function LalKitabScreen() {
 
         {reading !== '' && (
           <View style={styles.readingCard}>
-            <Text style={styles.readingLabel}>✦ YOUR LAL KITAB ANALYSIS ✦</Text>
+            <Text style={styles.readingLabel}>✦ YOUR LAL KITAB ANALYSIS ✦{'\n'}AI-Generated Analysis</Text>
             <Text style={styles.readingText}>{reading}</Text>
             <TouchableOpacity style={styles.resetBtn} onPress={() => setReading('')}>
               <Text style={styles.resetBtnText}>Get New Reading</Text>

@@ -150,7 +150,7 @@ export default function ChineseScreen() {
 
         {reading !== '' && (
           <View style={styles.readingCard}>
-            <Text style={styles.readingLabel}>✦ YOUR CHINESE ASTROLOGY READING ✦</Text>
+            <Text style={styles.readingLabel}>✦ YOUR CHINESE ASTROLOGY READING ✦{'\n'}AI-Generated Analysis</Text>
             <Text style={styles.readingText}>{reading}</Text>
           </View>
         )}

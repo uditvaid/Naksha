@@ -173,11 +173,11 @@ export default function ProfileScreen() {
               <Text style={styles.accountRowText}>Restore Purchases</Text>
               <Text style={styles.accountRowArrow}>→</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.accountRow} onPress={() => Alert.alert('Privacy Policy', 'Visit nakshatra.app/privacy')}>
+            <TouchableOpacity style={styles.accountRow} onPress={() => router.push('/legal/privacy')}>
               <Text style={styles.accountRowText}>Privacy Policy</Text>
               <Text style={styles.accountRowArrow}>→</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.accountRow} onPress={() => Alert.alert('Terms of Service', 'Visit nakshatra.app/terms')}>
+            <TouchableOpacity style={styles.accountRow} onPress={() => router.push('/legal/terms')}>
               <Text style={styles.accountRowText}>Terms of Service</Text>
               <Text style={styles.accountRowArrow}>→</Text>
             </TouchableOpacity>

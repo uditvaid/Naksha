@@ -76,6 +76,18 @@ export default function OnboardingScreen() {
       Alert.alert('Please select your date of birth'); return;
     }
 
+    if (step === 4 && place.trim()) {
+      const parts = place.split(',').map(p => p.trim());
+      const invalidPart = parts.find(p => !p || !/^[a-zA-Z\s\.\-']+$/.test(p));
+      if (invalidPart !== undefined) {
+        Alert.alert(
+          'Invalid Place',
+          'Please enter a valid place with city, state, or country (letters only).\n\nExamples: Faridabad, India · Columbus, Ohio · London, UK',
+        );
+        return;
+      }
+    }
+
     if (step === 4) {
       goToStep(5);
       setGenerating(true);

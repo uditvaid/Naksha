@@ -18,7 +18,7 @@ const TYPE_LABELS: Record<SavedReading['type'], { label: string; icon: string; c
   compatibility: { label: 'Compatibility',    icon: '♡',  color: Colors.rose },
 };
 
-const TYPE_FILTERS = ['All', 'Guru', 'Daily', 'Palm', 'Numerology', 'Compatibility', 'Lal Kitab'] as const;
+const TYPE_FILTERS = ['All', 'Guru', 'Daily', 'Palm', 'Numerology', 'Chinese', 'Compatibility', 'Lal Kitab'] as const;
 
 export default function SavedReadingsScreen() {
   const savedReadings = useAppStore(s => s.user.savedReadings);

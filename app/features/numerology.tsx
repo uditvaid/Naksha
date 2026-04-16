@@ -147,7 +147,7 @@ export default function NumerologyScreen() {
         {/* AI Reading */}
         {reading !== '' && (
           <View style={styles.readingCard}>
-            <Text style={styles.readingLabel}>✦ NUMEROLOGY READING ✦</Text>
+            <Text style={styles.readingLabel}>✦ NUMEROLOGY READING ✦{'\n'}AI-Generated Analysis</Text>
             <Text style={styles.readingText}>{reading}</Text>
           </View>
         )}

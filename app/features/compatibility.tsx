@@ -84,6 +84,18 @@ export default function CompatibilityScreen() {
       return;
     }
 
+    if (partnerPlace.trim()) {
+      const parts = partnerPlace.split(',').map(p => p.trim());
+      const invalidPart = parts.find(p => !p || !/^[a-zA-Z\s\.\-']+$/.test(p));
+      if (invalidPart !== undefined) {
+        Alert.alert(
+          'Invalid Place',
+          'Please enter a valid place with city, state, or country (letters only).\n\nExamples: Delhi, India · Columbus, Ohio · London, UK',
+        );
+        return;
+      }
+    }
+
     setLoading(true);
     setSaved(false);
     setScore(null);
