@@ -4,18 +4,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
+import { useShallow } from 'zustand/react/shallow';
 import { analyzePalm } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 
 export default function PalmScreen() {
-  const user = useAppStore(s => s.user);
+  const { isPremium, birthData } = useAppStore(useShallow(s => ({
+    isPremium: s.user.isPremium,
+    birthData: s.user.birthData,
+  })));
+  const saveReading = useAppStore(s => s.saveReading);
   const [selectedHand, setSelectedHand] = useState<'left' | 'right'>('right');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
 
-  if (!user.isPremium) {
+  if (!isPremium) {
     return (
       <SafeAreaView style={styles.container}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -68,13 +73,31 @@ export default function PalmScreen() {
   };
 
   const analyzeHand = async () => {
-    if (!imageBase64 || !user.birthData) return;
+    if (!imageBase64 || !birthData) return;
     setLoading(true);
     try {
-      const result = await analyzePalm(imageBase64, user.birthData, selectedHand);
+      const result = await analyzePalm(imageBase64, birthData, selectedHand);
       setReading(result);
-    } catch (e) {
-      Alert.alert('Reading Failed', 'Could not analyze the image. Please ensure your palm is clearly visible and try again.');
+      saveReading({
+        type: 'palm',
+        title: `${selectedHand === 'left' ? 'Left' : 'Right'} Palm Reading`,
+        preview: result.slice(0, 120) + '…',
+        content: result,
+      });
+      // Release the base64 payload on success; imageUri still drives the preview.
+      // On failure we keep it so the user can retry without re-picking.
+      setImageBase64(null);
+    } catch (e: any) {
+      const msg = e?.message;
+      const isNetworkOrTimeout = msg && (
+        msg.includes('too long') || msg.includes('reach') || msg.includes('unavailable')
+      );
+      Alert.alert(
+        'Reading Failed',
+        isNetworkOrTimeout
+          ? msg
+          : 'Could not analyze the image. Please ensure your palm is clearly visible and try again.',
+      );
     } finally {
       setLoading(false);
     }

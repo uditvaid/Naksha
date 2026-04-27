@@ -8,9 +8,23 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "environment": "production",
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    },
+    "testflight": {
+      "environment": "production",
+      "env": {
+        "ENABLE_TEST_MODE": "true"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      }
     },
     "production": {
+      "environment": "production",
       "ios": {
         "resourceClass": "m-medium"
       }

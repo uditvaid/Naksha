@@ -35,9 +35,7 @@ export const Fonts = {
   cinzelBold: 'Cinzel_600SemiBold',
   cormorant: 'CormorantGaramond_400Regular',
   cormorantItalic: 'CormorantGaramond_400Regular_Italic',
-  cormorantLight: 'CormorantGaramond_300Light',
   crimson: 'CrimsonPro_400Regular',
-  crimsonLight: 'CrimsonPro_300Light',
 };
 
 export const Spacing = {

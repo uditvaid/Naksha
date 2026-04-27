@@ -11,9 +11,8 @@ export function getAyanamsha(year: number): number {
 
 export function tropicalToSidereal(tropicalDeg: number, year: number): number {
   const ayanamsha = getAyanamsha(year);
-  let sidereal = tropicalDeg - ayanamsha;
-  if (sidereal < 0) sidereal += 360;
-  return sidereal;
+  const sidereal = tropicalDeg - ayanamsha;
+  return ((sidereal % 360) + 360) % 360;
 }
 
 export function degreeToSign(degree: number): { sign: string; signIndex: number; degreeInSign: number } {
@@ -51,16 +50,21 @@ export function calculateVimshottariDasha(moonDegree: number, birthDate: Date): 
   const startPlanet = rulerMap[nakshatraData.ruler] ?? 'Ketu';
   const startIndex = DASHA_ORDER.indexOf(startPlanet);
 
-  // Calculate elapsed portion
+  // Calculate elapsed portion. Clamp to [0, 1] — the stored `start` values in
+  // NAKSHATRAS are rounded (e.g. 13.333 vs exact 13.333̄), so floating-point
+  // arithmetic can produce elapsed slightly outside [0, 1] at nakshatra boundaries.
   const nakshatraStart = nakshatraData.start;
   const nakshatraSpan = 360 / 27;
-  const elapsed = (moonDegree - nakshatraStart) / nakshatraSpan;
+  const elapsed = Math.max(0, Math.min(1, (moonDegree - nakshatraStart) / nakshatraSpan));
   const totalYears = MAHADASHA_YEARS[startPlanet] ?? 7;
   const elapsedYears = elapsed * totalYears;
 
   const dashas: DashaPeriod[] = [];
-  let currentDate = new Date(birthDate);
-  currentDate.setFullYear(currentDate.getFullYear() - elapsedYears);
+  // Use milliseconds for the initial offset so fractional years are handled correctly.
+  // setFullYear(n - 2.6) silently truncates to setFullYear(n - 2), placing the start
+  // date months too late. Multiplying by MS_PER_YEAR gives the right calendar date.
+  const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+  let currentDate = new Date(birthDate.getTime() - elapsedYears * MS_PER_YEAR);
 
   const now = new Date();
 
@@ -68,8 +72,7 @@ export function calculateVimshottariDasha(moonDegree: number, birthDate: Date): 
     const planetIndex = (startIndex + i) % 9;
     const planet = DASHA_ORDER[planetIndex] ?? 'Ketu';
     const years = MAHADASHA_YEARS[planet] ?? 7;
-    const endDate = new Date(currentDate);
-    endDate.setFullYear(endDate.getFullYear() + years);
+    const endDate = new Date(currentDate.getTime() + years * MS_PER_YEAR);
 
     dashas.push({
       planet,
@@ -119,7 +122,7 @@ export function calculateSoulUrge(name: string): number {
   const digits = name.toLowerCase().replace(/[^a-z]/g, '')
     .split('').filter(c => VOWELS.includes(c)).map(c => PYTHAGOREAN[c] ?? 0);
   let sum = digits.reduce((a, b) => a + b, 0);
-  while (sum > 9 && sum !== 11 && sum !== 22) {
+  while (sum > 9 && sum !== 11 && sum !== 22 && sum !== 33) {
     sum = sum.toString().split('').map(Number).reduce((a, b) => a + b, 0);
   }
   return sum;
@@ -148,7 +151,7 @@ export function getChineseZodiac(year: number): { animal: string; element: strin
   const STEMS = ['Yang Metal','Yin Metal','Yang Water','Yin Water','Yang Wood','Yin Wood','Yang Fire','Yin Fire','Yang Earth','Yin Earth'];
 
   const animalIndex = (year - 4) % 12;
-  const stemIndex = year % 10;
+  const stemIndex = (year - 4) % 10;
 
   return {
     animal: ANIMALS[((animalIndex % 12) + 12) % 12] ?? 'Rat',

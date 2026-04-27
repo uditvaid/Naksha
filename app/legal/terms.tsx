@@ -30,7 +30,7 @@ export default function TermsOfServiceScreen() {
           compatibility)
           {'\n'}- An AI Guru for spiritual guidance conversations
           {'\n'}- Numerology calculations and interpretations
-          {'\n'}- Chinese astrology (BaZi Four Pillars) analysis
+          {'\n'}- Chinese astrology (Year Pillar) analysis
           {'\n'}- Lal Kitab planetary remedies
           {'\n'}- Palm reading analysis via photograph
           {'\n'}- Vedic compatibility (Ashtakoota) analysis
@@ -71,9 +71,9 @@ export default function TermsOfServiceScreen() {
         <Section title="5. Premium Subscription">
           <Bold>a) Plans & Pricing</Bold>
           {'\n'}Naksha offers premium subscriptions through the Apple App Store and Google Play Store:
-          {'\n'}- Monthly: $9.99/month
-          {'\n'}- Annual: $59.99/year
-          {'\n'}- Lifetime: $149.99 one-time purchase
+          {'\n'}- Monthly: $14.99/month
+          {'\n'}- Annual: $149.99/year
+          {'\n'}- Lifetime: $249.99 one-time purchase
           {'\n\n'}<Bold>b) Auto-Renewal</Bold>
           {'\n'}Monthly and annual subscriptions auto-renew at the end of each billing period unless
           cancelled at least 24 hours before the renewal date. Lifetime purchases do not renew.
@@ -151,7 +151,7 @@ export default function TermsOfServiceScreen() {
 
         <Section title="14. Contact Us">
           If you have questions about these Terms, please contact us at:
-          {'\n\n'}Email: support@nakshatra.app
+          {'\n\n'}Email: nakshaguide@gmail.com
         </Section>
 
         <View style={{ height: 100 }} />

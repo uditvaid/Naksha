@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
@@ -20,6 +20,7 @@ const PLANET_SYMBOLS: Record<string, string> = {
 
 export default function LalKitabScreen() {
   const user = useAppStore(s => s.user);
+  const saveReading = useAppStore(s => s.saveReading);
   const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,8 +51,14 @@ export default function LalKitabScreen() {
     try {
       const result = await getLalKitabReading(user.birthData, user.chart, selectedPlanet ?? undefined);
       setReading(result);
-    } catch {
-      setReading('Unable to fetch reading. Please try again.');
+      saveReading({
+        type: 'lalkitab',
+        title: selectedPlanet ? `Lal Kitab · ${selectedPlanet}` : 'Lal Kitab Reading',
+        preview: result.slice(0, 120),
+        content: result,
+      });
+    } catch (e: any) {
+      Alert.alert('Reading Unavailable', e?.message ?? 'Could not fetch the reading. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -181,7 +188,11 @@ const styles = StyleSheet.create({
   loadingState: { padding: Spacing.xl, alignItems: 'center', gap: 16 },
   loadingText: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.cormorantItalic },
   readingCard: { margin: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.md },
-  readingLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, textAlign: 'center', marginBottom: Spacing.md },
+  readingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.md },
+  readingLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, flex: 1 },
+  saveBtn: { backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 6 },
+  saveBtnSaved: { backgroundColor: Colors.emerald + '22', borderColor: Colors.emerald },
+  saveBtnText: { fontSize: 11, fontFamily: Fonts.cinzel, color: Colors.gold },
   readingText: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 26 },
   resetBtn: { marginTop: Spacing.md, alignItems: 'center' },
   resetBtnText: { fontSize: 13, color: Colors.gold, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },

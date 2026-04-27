@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Naksha',
   slug: 'nakshatra',
-  version: '1.0.0',
+  version: '1.0.1',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'dark',
@@ -16,15 +16,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'app.nakshatra.vedic',
-    buildNumber: '4',
+    buildNumber: '17',
     infoPlist: {
       NSCameraUsageDescription:
         'Naksha uses your camera to read your palm lines for Vedic palmistry analysis.',
       NSPhotoLibraryUsageDescription:
         'Naksha can analyze photos of your palm for palmistry readings.',
-      NSUserNotificationUsageDescription:
-        'Naksha sends you personalized daily cosmic alerts based on your birth chart.',
       ITSAppUsesNonExemptEncryption: false,
+      UIRequiresFullScreen: true,
     },
     privacyManifests: {
       NSPrivacyTracking: false,
@@ -38,12 +37,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         },
         {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeDateOfBirth',
-          NSPrivacyCollectedDataTypeLinked: true,
-          NSPrivacyCollectedDataTypeTracking: false,
-          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
-        },
-        {
-          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeCoarseLocation',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
           NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
@@ -91,7 +84,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#080B14',
     },
     package: 'app.nakshatra.vedic',
-    versionCode: 1,
+    versionCode: 15,
     permissions: [
       'android.permission.CAMERA',
       'android.permission.READ_EXTERNAL_STORAGE',
@@ -109,11 +102,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-build-properties',
       {
-        ios: { newArchEnabled: false },
+        ios: { newArchEnabled: false, deploymentTarget: '16.0' },
         android: { newArchEnabled: false },
       },
     ],
-    'expo-notifications',
   ],
   scheme: 'nakshatra',
   experiments: {
@@ -128,5 +120,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     prokeralaClientSecret: process.env.PROKERALA_CLIENT_SECRET ?? '',
     revenueCatIosKey: process.env.REVENUECAT_IOS_KEY ?? '',
     revenueCatAndroidKey: process.env.REVENUECAT_ANDROID_KEY ?? '',
+    buildProfile: process.env.EAS_BUILD_PROFILE ?? 'local',
+    enableTestMode: process.env.ENABLE_TEST_MODE ?? 'false',
   },
 });

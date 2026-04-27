@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, Alert, SafeAreaView as RNSafeAreaView,
+  View, Text, ScrollView, FlatList, TouchableOpacity, StyleSheet,
+  Modal, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -19,18 +19,29 @@ const TYPE_LABELS: Record<SavedReading['type'], { label: string; icon: string; c
 };
 
 const TYPE_FILTERS = ['All', 'Guru', 'Daily', 'Palm', 'Numerology', 'Chinese', 'Compatibility', 'Lal Kitab'] as const;
+type FilterLabel = typeof TYPE_FILTERS[number];
+
+const FILTER_TO_TYPE: Record<FilterLabel, SavedReading['type'] | 'All'> = {
+  'All': 'All',
+  'Guru': 'guru',
+  'Daily': 'daily',
+  'Palm': 'palm',
+  'Numerology': 'numerology',
+  'Chinese': 'chinese',
+  'Compatibility': 'compatibility',
+  'Lal Kitab': 'lalkitab',
+};
 
 export default function SavedReadingsScreen() {
   const savedReadings = useAppStore(s => s.user.savedReadings);
   const deleteSavedReading = useAppStore(s => s.deleteSavedReading);
 
   const [selected, setSelected] = useState<SavedReading | null>(null);
-  const [filter, setFilter] = useState<string>('All');
+  const [filter, setFilter] = useState<FilterLabel>('All');
 
   const filtered = savedReadings.filter(r => {
-    if (filter === 'All') return true;
-    const label = TYPE_LABELS[r.type]?.label ?? '';
-    return label.toLowerCase().includes(filter.toLowerCase());
+    const typeFilter = FILTER_TO_TYPE[filter];
+    return typeFilter === 'All' || r.type === typeFilter;
   });
 
   const handleDelete = (id: string) => {
@@ -84,51 +95,57 @@ export default function SavedReadingsScreen() {
       </ScrollView>
 
       {/* List */}
-      {filtered.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>✦</Text>
-          <Text style={styles.emptyTitle}>No saved readings yet</Text>
-          <Text style={styles.emptyText}>
-            Your Guru conversations, daily readings, and feature readings will be saved here automatically.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-          {filtered.map(r => {
-            const meta = TYPE_LABELS[r.type] ?? { label: r.type, icon: '◉', color: Colors.gold };
-            return (
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item: r }) => {
+          const meta = TYPE_LABELS[r.type] ?? { label: r.type, icon: '◉', color: Colors.gold };
+          return (
+            <TouchableOpacity
+              style={styles.readingCard}
+              onPress={() => setSelected(r)}
+              activeOpacity={0.75}
+            >
+              <View style={[styles.readingIcon, { backgroundColor: meta.color + '20' }]}>
+                <Text style={styles.readingIconText}>{meta.icon}</Text>
+              </View>
+              <View style={styles.readingInfo}>
+                <View style={styles.readingTopRow}>
+                  <Text style={[styles.readingType, { color: meta.color }]}>{meta.label}</Text>
+                  <Text style={styles.readingDate}>{formatDate(r.createdAt)}</Text>
+                </View>
+                <Text style={styles.readingTitle} numberOfLines={1}>{r.title}</Text>
+                {r.question && (
+                  <Text style={styles.readingQuestion} numberOfLines={1}>Q: {r.question}</Text>
+                )}
+                <Text style={styles.readingPreview} numberOfLines={2}>{r.preview}</Text>
+              </View>
               <TouchableOpacity
-                key={r.id}
-                style={styles.readingCard}
-                onPress={() => setSelected(r)}
-                activeOpacity={0.75}
+                style={styles.deleteBtn}
+                onPress={() => handleDelete(r.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <View style={[styles.readingIcon, { backgroundColor: meta.color + '20' }]}>
-                  <Text style={styles.readingIconText}>{meta.icon}</Text>
-                </View>
-                <View style={styles.readingInfo}>
-                  <View style={styles.readingTopRow}>
-                    <Text style={[styles.readingType, { color: meta.color }]}>{meta.label}</Text>
-                    <Text style={styles.readingDate}>{formatDate(r.createdAt)}</Text>
-                  </View>
-                  <Text style={styles.readingTitle} numberOfLines={1}>{r.title}</Text>
-                  {r.question && (
-                    <Text style={styles.readingQuestion} numberOfLines={1}>Q: {r.question}</Text>
-                  )}
-                  <Text style={styles.readingPreview} numberOfLines={2}>{r.preview}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => handleDelete(r.id)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Text style={styles.deleteBtnText}>✕</Text>
-                </TouchableOpacity>
+                <Text style={styles.deleteBtnText}>✕</Text>
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
+            </TouchableOpacity>
+          );
+        }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>✦</Text>
+            <Text style={styles.emptyTitle}>No saved readings yet</Text>
+            <Text style={styles.emptyText}>
+              Your Guru conversations, daily readings, and feature readings will be saved here automatically.
+            </Text>
+          </View>
+        }
+      />
 
       {/* Detail modal */}
       <Modal
@@ -138,7 +155,7 @@ export default function SavedReadingsScreen() {
         onRequestClose={() => setSelected(null)}
       >
         {selected && (
-          <RNSafeAreaView style={styles.modalContainer}>
+          <SafeAreaView style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={() => setSelected(null)} style={styles.modalClose}>
                 <Text style={styles.modalCloseText}>✕</Text>
@@ -169,7 +186,7 @@ export default function SavedReadingsScreen() {
               </TouchableOpacity>
               <View style={{ height: 40 }} />
             </ScrollView>
-          </RNSafeAreaView>
+          </SafeAreaView>
         )}
       </Modal>
     </SafeAreaView>
@@ -183,7 +200,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontFamily: Fonts.cinzel, color: Colors.gold },
   subtitle: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 3 },
 
-  filterScroll: { maxHeight: 50 },
+  filterScroll: {},
   filterContainer: { paddingHorizontal: Spacing.md, gap: 8, alignItems: 'center', paddingVertical: 8 },
   filterChip: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.cardBorder, backgroundColor: Colors.card },
   filterChipActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },

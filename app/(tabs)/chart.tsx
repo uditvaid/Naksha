@@ -1,15 +1,17 @@
 import { useState, useRef, memo, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Modal, ActivityIndicator, SafeAreaView as RNSafeAreaView,
+  Dimensions, Modal, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Rect, Line, Text as SvgText, G } from 'react-native-svg';
 import { useAppStore } from '@store/userStore';
+import { useShallow } from 'zustand/react/shallow';
 import { router } from 'expo-router';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
-import { PLANETS } from '@constants/astrology';
+import { PLANETS_BY_ID } from '@constants/astrology';
 import { askGuru } from '@services/claude';
+import { generateChart } from '@services/prokerala';
 
 const { width } = Dimensions.get('window');
 const CHART_SIZE = width - 40;
@@ -22,7 +24,7 @@ const NorthIndianChart = memo(function NorthIndianChart({ planets }: { planets: 
   planets.forEach(p => {
     const h = p.house;
     if (!planetsByHouse[h]) planetsByHouse[h] = [];
-    const symbol = PLANETS.find(pl => pl.id === p.planet.toLowerCase())?.symbol ?? p.planet[0];
+    const symbol = PLANETS_BY_ID.get(p.planet.toLowerCase())?.symbol ?? p.planet[0];
     planetsByHouse[h].push(`${symbol}${p.isRetrograde ? '℞' : ''}`);
   });
 
@@ -82,7 +84,7 @@ function DetailModal({
 }) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <RNSafeAreaView style={modalStyles.container}>
+      <SafeAreaView style={modalStyles.container}>
         <View style={modalStyles.header}>
           <TouchableOpacity onPress={onClose} style={modalStyles.closeBtn}>
             <Text style={modalStyles.closeBtnText}>✕</Text>
@@ -116,7 +118,7 @@ function DetailModal({
 
           <View style={{ height: 40 }} />
         </ScrollView>
-      </RNSafeAreaView>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -145,29 +147,91 @@ const DASHA_MEANINGS: Record<string, { theme: string; description: string; oppor
 };
 
 export default function ChartScreen() {
-  const user = useAppStore(s => s.user);
+  const { birthData, chart, isPremiumFlag } = useAppStore(useShallow(s => ({
+    birthData: s.user.birthData,
+    chart: s.user.chart,
+    isPremiumFlag: s.user.isPremium,
+  })));
+  const setChart = useAppStore(s => s.setChart);
   const [activeTab, setActiveTab] = useState<Tab>('Chart');
   const [modalVisible, setModalVisible] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalSubtitle, setModalSubtitle] = useState('');
   const [modalContent, setModalContent] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState(false);
 
-  const planets = user.chart?.planets ?? [];
-  const dashas = user.chart?.dashas ?? [];
-  const yogas = user.chart?.yogas ?? [];
-  const now = new Date();
-  const isPremium = user.isPremium;
-  const guruCacheRef = useRef<Record<string, string>>({});
+  const user = { birthData, chart, isPremium: isPremiumFlag };
 
-  const openDasha = async (dasha: any) => {
-    if (!isPremium) { router.push('/paywall'); return; }
-    const info = DASHA_MEANINGS[dasha.planet];
+  const handleRetryChart = async () => {
+    if (!birthData || retrying) return;
+    setRetrying(true);
+    setRetryError(false);
+    try {
+      const newChart = await generateChart(birthData);
+      setChart(newChart);
+    } catch {
+      setRetryError(true);
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const chartPlanets = chart?.planets;
+  const chartDashas = chart?.dashas;
+  const chartYogas = chart?.yogas;
+  const planets = useMemo(() => chartPlanets ?? [], [chartPlanets]);
+  const dashas = useMemo(() => chartDashas ?? [], [chartDashas]);
+  const yogas = useMemo(() => chartYogas ?? [], [chartYogas]);
+  const now = useMemo(() => new Date(), []);
+
+  const dashaRows = useMemo(() => dashas.map(dasha => {
     const start = new Date(dasha.startDate);
     const end = new Date(dasha.endDate);
-    const cacheKey = `dasha-${dasha.planet}`;
+    const total = end.getTime() - start.getTime();
+    const elapsed = Math.min(now.getTime() - start.getTime(), total);
+    const pct = total > 0 ? Math.max(0, Math.min(1, elapsed / total)) : 0;
+    const planet = PLANETS_BY_ID.get(dasha.planet.toLowerCase());
+    const info = DASHA_MEANINGS[dasha.planet];
+    const isPast = !dasha.isActive && now >= end;
+    const isFuture = !dasha.isActive && now < start;
+    return { dasha, start, end, pct, planet, info, isPast, isFuture };
+  }), [dashas, now]);
+  const isPremium = user.isPremium;
+  const guruCacheRef = useRef<Record<string, string>>({});
+  // Increments whenever the modal is closed/reopened. Async handlers compare against
+  // their captured token before applying state, preventing late responses from
+  // overwriting content for a different (or already-closed) modal session.
+  const requestTokenRef = useRef(0);
+
+  const openDasha = async (dasha: any) => {
+    const start = new Date(dasha.startDate);
+    const end = new Date(dasha.endDate);
+    const isPast = !dasha.isActive && now >= end;
+    const isFuture = !dasha.isActive && now < start;
+
+    // Future periods are premium-only
+    if (isFuture && !isPremium) { router.push('/paywall'); return; }
+
+    const info = DASHA_MEANINGS[dasha.planet];
+    const cacheKey = `dasha-${dasha.planet}-${isPast ? 'past' : dasha.isActive ? 'active' : 'future'}`;
     setModalTitle(`${dasha.planet} Period`);
     setModalSubtitle(`${start.getFullYear()} – ${end.getFullYear()} · ${dasha.years} years`);
+
+    const staticInfo = info
+      ? `THEME: ${info.theme}\n\n${info.description}\n\nOPPORTUNITIES\n${info.opportunities}\n\nWATCH FOR\n${info.watch}`
+      : `This is your ${dasha.planet} planetary period.`;
+
+    const token = ++requestTokenRef.current;
+
+    // Current/future dasha — free users get static + upsell, premium gets AI reading
+    if (!isPast && !isPremium) {
+      setModalContent(staticInfo + '\n\n─────────────────\n✦ Subscribe to unlock your personalised reading for this period.');
+      setModalLoading(false);
+      setModalVisible(true);
+      return;
+    }
 
     if (guruCacheRef.current[cacheKey]) {
       setModalContent(guruCacheRef.current[cacheKey]);
@@ -176,36 +240,48 @@ export default function ChartScreen() {
       return;
     }
 
-    // Show static info immediately while Guru loads
-    const staticInfo = info
-      ? `THEME: ${info.theme}\n\n${info.description}\n\nOPPORTUNITIES\n${info.opportunities}\n\nWATCH FOR\n${info.watch}`
-      : `This is your ${dasha.planet} planetary period.`;
     setModalContent(staticInfo);
     setModalLoading(true);
     setModalVisible(true);
 
+    let prompt: string;
+    if (isPast) {
+      prompt = `I went through my ${dasha.planet} Mahadasha from ${start.getFullYear()} to ${end.getFullYear()} (${dasha.years} years) — this period has now passed. Reflecting on it through the lens of my birth chart: what were the defining themes, life lessons, and karmic patterns that this period would have brought for me specifically? How would my particular planetary placements have coloured this period? What was being resolved or revealed? Give me a meaningful retrospective reading. Explain in simple, clear English.`;
+    } else if (dasha.isActive) {
+      prompt = `I'm currently in my ${dasha.planet} Mahadasha (${start.getFullYear()}–${end.getFullYear()}, ${dasha.years} years). Give me a deeply personal reading of what this planetary period means specifically for me based on my chart. Cover: the core theme and energy of this period in my life; how it interacts with my specific planetary placements; what opportunities I should look for; what challenges to be mindful of; and practical advice for navigating this period well. Explain in simple, clear English without jargon.`;
+    } else {
+      prompt = `I will enter my ${dasha.planet} Mahadasha from ${start.getFullYear()} to ${end.getFullYear()} (${dasha.years} years) in the future. Based on my specific birth chart, how should I prepare for this period? What themes, opportunities, and challenges can I expect? Which areas of my life will this period most strongly activate? What can I do now to make the most of it when it arrives? Explain in simple, clear English without jargon.`;
+    }
+
     try {
       if (!user.birthData) throw new Error('No birth data');
-      const response = await askGuru(
-        `I'm currently ${dasha.isActive ? 'in' : (now > end ? 'past' : 'approaching')} my ${dasha.planet} Mahadasha (${start.getFullYear()}–${end.getFullYear()}, ${dasha.years} years). Give me a deeply personal reading of what this planetary period means specifically for me based on my chart. Cover: the core theme and energy of this period in my life; how it interacts with my specific planetary placements; what opportunities I should look for; what challenges to be mindful of; and practical advice for navigating this period well. Explain in simple, clear English without jargon.`,
-        [],
-        user.birthData,
-        user.chart
-      );
+      const response = await askGuru(prompt, [], user.birthData, user.chart);
       guruCacheRef.current[cacheKey] = response;
-      setModalContent(response);
-    } catch {
-      // Keep the static info already shown
+      if (token === requestTokenRef.current) setModalContent(response);
+    } catch (e: any) {
+      if (token === requestTokenRef.current) {
+        setModalContent(prev => prev + `\n\n[AI reading unavailable: ${e?.message ?? 'Please try again.'}]`);
+      }
     } finally {
-      setModalLoading(false);
+      if (token === requestTokenRef.current) setModalLoading(false);
     }
   };
 
   const openYoga = async (yoga: string) => {
-    if (!isPremium) { router.push('/paywall'); return; }
     const cacheKey = `yoga-${yoga}`;
     setModalTitle(yoga);
     setModalSubtitle('Planetary combination in your chart');
+
+    const staticDesc = YOGA_DESCRIPTIONS[yoga] ?? `${yoga} is a meaningful planetary combination present in your birth chart.`;
+
+    const token = ++requestTokenRef.current;
+
+    if (!isPremium) {
+      setModalContent(staticDesc + '\n\n─────────────────\n✦ Subscribe to unlock your personalised reading for this yoga.');
+      setModalLoading(false);
+      setModalVisible(true);
+      return;
+    }
 
     if (guruCacheRef.current[cacheKey]) {
       setModalContent(guruCacheRef.current[cacheKey]);
@@ -214,8 +290,7 @@ export default function ChartScreen() {
       return;
     }
 
-    // Show static description while Guru loads
-    setModalContent(YOGA_DESCRIPTIONS[yoga] ?? `${yoga} is a meaningful planetary combination present in your birth chart.`);
+    setModalContent(staticDesc);
     setModalLoading(true);
     setModalVisible(true);
 
@@ -228,19 +303,31 @@ export default function ChartScreen() {
         user.chart
       );
       guruCacheRef.current[cacheKey] = response;
-      setModalContent(response);
-    } catch {
-      // Keep the static info already shown
+      if (token === requestTokenRef.current) setModalContent(response);
+    } catch (e: any) {
+      if (token === requestTokenRef.current) {
+        setModalContent(prev => prev + `\n\n[AI reading unavailable: ${e?.message ?? 'Please try again.'}]`);
+      }
     } finally {
-      setModalLoading(false);
+      if (token === requestTokenRef.current) setModalLoading(false);
     }
   };
 
   const openPlanet = async (p: any) => {
-    if (!isPremium) { router.push('/paywall'); return; }
     const cacheKey = `planet-${p.planet}-${p.sign}-${p.house}`;
     setModalTitle(`${p.planet} in ${p.sign}`);
     setModalSubtitle(`House ${p.house} · ${p.nakshatra} · ${p.isRetrograde ? 'Retrograde' : 'Direct'}`);
+
+    const staticDesc = `${p.planet} is placed in ${p.sign} in your ${p.house}th house, in the nakshatra ${p.nakshatra}${p.isRetrograde ? ' and is currently retrograde' : ''}.\n\n${p.sign} colours the expression of ${p.planet}'s energy — the ${p.house}th house shows which area of life this plays out most strongly. The nakshatra ${p.nakshatra} adds a further layer of nuance to how this placement manifests in your personality and life path.`;
+
+    const token = ++requestTokenRef.current;
+
+    if (!isPremium) {
+      setModalContent(staticDesc + '\n\n─────────────────\n✦ Subscribe to unlock your personalised reading for this placement.');
+      setModalLoading(false);
+      setModalVisible(true);
+      return;
+    }
 
     if (guruCacheRef.current[cacheKey]) {
       setModalContent(guruCacheRef.current[cacheKey]);
@@ -249,7 +336,7 @@ export default function ChartScreen() {
       return;
     }
 
-    setModalContent('');
+    setModalContent(staticDesc);
     setModalLoading(true);
     setModalVisible(true);
 
@@ -262,11 +349,13 @@ export default function ChartScreen() {
         user.chart
       );
       guruCacheRef.current[cacheKey] = response;
-      setModalContent(response);
-    } catch {
-      setModalContent(`Your ${p.planet} is placed in ${p.sign} in your ${p.house}th house. Ask the Guru below to get a personalised explanation of what this means for you.`);
+      if (token === requestTokenRef.current) setModalContent(response);
+    } catch (e: any) {
+      if (token === requestTokenRef.current) {
+        setModalContent(prev => prev + `\n\n[AI reading unavailable: ${e?.message ?? 'Please try again.'}]`);
+      }
     } finally {
-      setModalLoading(false);
+      if (token === requestTokenRef.current) setModalLoading(false);
     }
   };
 
@@ -282,10 +371,29 @@ export default function ChartScreen() {
         <Text style={styles.title}>Birth Chart</Text>
         <Text style={styles.subtitle}>
           {user.birthData
-            ? `${new Date(user.birthData.dateOfBirth).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })} · ${user.birthData.placeOfBirth}`
+            ? `${new Date(user.birthData.dateOfBirth).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })} · ${user.birthData.placeOfBirth}`
             : 'Complete onboarding to see your chart'}
         </Text>
       </View>
+
+      {/* Approximate mode banner */}
+      {user.chart?.isApproximate && (
+        <View style={styles.approxBanner}>
+          <Text style={styles.approxBannerIcon}>⚠</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.approxBannerTitle}>Approximate Mode</Text>
+            <Text style={styles.approxBannerText}>
+              We couldn't reach the astrology server, so this chart uses simplified calculations.
+            </Text>
+            <TouchableOpacity onPress={handleRetryChart} disabled={retrying} style={styles.approxRetryBtn}>
+              <Text style={styles.approxRetryText}>{retrying ? 'Retrying…' : 'Tap to Retry'}</Text>
+            </TouchableOpacity>
+            {retryError && (
+              <Text style={styles.approxRetryError}>Could not connect — try again later.</Text>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Tab bar */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
@@ -339,30 +447,23 @@ export default function ChartScreen() {
             {dashas.length === 0 ? (
               <Text style={styles.emptyText}>Generate your chart to see your planetary periods.</Text>
             ) : (
-              dashas.map(dasha => {
-                const start = new Date(dasha.startDate);
-                const end = new Date(dasha.endDate);
-                const total = end.getTime() - start.getTime();
-                const elapsed = Math.min(now.getTime() - start.getTime(), total);
-                const pct = Math.max(0, Math.min(1, elapsed / total));
-                const planet = PLANETS.find(p => p.id === dasha.planet.toLowerCase());
-                const info = DASHA_MEANINGS[dasha.planet];
-
+              dashaRows.map(({ dasha, start, end, pct, planet, info, isPast, isFuture }) => {
+                const locked = isFuture && !isPremium;
                 return (
                   <TouchableOpacity
                     key={dasha.planet + dasha.startDate}
-                    style={[styles.dashaCard, dasha.isActive && styles.dashaCardActive]}
+                    style={[styles.dashaCard, dasha.isActive && styles.dashaCardActive, isPast && styles.dashaCardPast]}
                     onPress={() => openDasha(dasha)}
                     activeOpacity={0.75}
                   >
                     <View style={styles.dashaHeader}>
                       <View style={styles.dashaLeft}>
-                        <Text style={[styles.dashaSymbol, { color: planet?.color ?? Colors.gold }]}>
+                        <Text style={[styles.dashaSymbol, { color: isPast ? Colors.muted : (planet?.color ?? Colors.gold) }]}>
                           {planet?.symbol ?? '◉'}
                         </Text>
                         <View style={{ flex: 1 }}>
                           <View style={styles.dashaTopRow}>
-                            <Text style={styles.dashaPlanet}>
+                            <Text style={[styles.dashaPlanet, isPast && { color: Colors.muted }]}>
                               {dasha.planet} Period
                             </Text>
                             {dasha.isActive && (
@@ -370,25 +471,28 @@ export default function ChartScreen() {
                                 <Text style={styles.activeBadgeText}>NOW</Text>
                               </View>
                             )}
+                            {isPast && (
+                              <Text style={styles.pastBadge}>PAST</Text>
+                            )}
                           </View>
-                          {info && <Text style={styles.dashaTheme}>{info.theme}</Text>}
+                          {info && <Text style={[styles.dashaTheme, isPast && { color: Colors.muted }]}>{info.theme}</Text>}
                           <Text style={styles.dashaDates}>
                             {start.getFullYear()} – {end.getFullYear()} · {dasha.years} yrs
                           </Text>
                         </View>
                       </View>
                       <View style={styles.dashaRight}>
-                        {isPremium ? (
-                          <Text style={styles.tapHint}>Tap →</Text>
-                        ) : (
+                        {locked ? (
                           <Text style={styles.lockIcon}>✦</Text>
+                        ) : (
+                          <Text style={styles.tapHint}>Tap →</Text>
                         )}
                       </View>
                     </View>
                     <View style={styles.dashaTrack}>
                       <View style={[styles.dashaFill, {
                         width: `${pct * 100}%`,
-                        backgroundColor: dasha.isActive ? Colors.gold : (planet?.color ?? Colors.gold),
+                        backgroundColor: dasha.isActive ? Colors.gold : (isPast ? Colors.muted : (planet?.color ?? Colors.gold)),
                       }]} />
                     </View>
                   </TouchableOpacity>
@@ -422,10 +526,7 @@ export default function ChartScreen() {
                       <Text style={styles.yogaHint}>Tap to learn what this means for you</Text>
                     </View>
                   </View>
-                  {isPremium
-                    ? <Text style={styles.tapHint}>→</Text>
-                    : <Text style={styles.lockIcon}>✦ Pro</Text>
-                  }
+                  <Text style={styles.tapHint}>→</Text>
                 </TouchableOpacity>
               ))
             )}
@@ -449,7 +550,7 @@ export default function ChartScreen() {
               <Text style={styles.emptyText}>Generate your chart to see your planetary positions.</Text>
             ) : (
               planets.map(p => {
-                const planetData = PLANETS.find(pl => pl.id === p.planet.toLowerCase());
+                const planetData = PLANETS_BY_ID.get(p.planet.toLowerCase());
                 return (
                   <TouchableOpacity
                     key={p.planet}
@@ -477,10 +578,7 @@ export default function ChartScreen() {
                       )}
                     </View>
                     <View style={styles.planetRight}>
-                      {isPremium
-                        ? <Text style={styles.tapHint}>Tap →</Text>
-                        : <Text style={styles.lockIcon}>✦ Pro</Text>
-                      }
+                      <Text style={styles.tapHint}>Tap →</Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -500,7 +598,14 @@ export default function ChartScreen() {
         content={modalContent}
         loading={modalLoading}
         isPremium={isPremium}
-        onClose={() => { setModalVisible(false); setModalContent(''); setModalLoading(false); }}
+        onClose={() => {
+          requestTokenRef.current += 1;
+          setModalVisible(false);
+          setModalContent('');
+          setModalLoading(false);
+          setModalTitle('');
+          setModalSubtitle('');
+        }}
         onAskGuru={handleAskGuru}
       />
     </SafeAreaView>
@@ -512,8 +617,8 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: 4 },
   title: { fontSize: 24, fontFamily: Fonts.cinzel, color: Colors.gold },
   subtitle: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 3 },
-  tabsScroll: { maxHeight: 52, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
-  tabsContainer: { paddingHorizontal: Spacing.md, gap: 8, alignItems: 'center', paddingVertical: 8 },
+  tabsScroll: { borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  tabsContainer: { paddingHorizontal: Spacing.md, gap: 8, alignItems: 'center', paddingVertical: 10 },
   tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.cardBorder },
   tabActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
   tabText: { fontSize: 12, fontFamily: Fonts.cinzel, color: Colors.muted, letterSpacing: 0.5 },
@@ -539,6 +644,7 @@ const styles = StyleSheet.create({
   // Dashas
   dashaCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: 14, marginBottom: 10 },
   dashaCardActive: { borderColor: Colors.gold, backgroundColor: 'rgba(201,168,76,0.06)' },
+  dashaCardPast: { opacity: 0.65 },
   dashaHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   dashaLeft: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   dashaTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
@@ -549,6 +655,7 @@ const styles = StyleSheet.create({
   dashaRight: { paddingLeft: 8 },
   activeBadge: { backgroundColor: Colors.emerald + '22', borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 2 },
   activeBadgeText: { fontSize: 9, color: Colors.emerald, fontFamily: Fonts.cinzel, letterSpacing: 1 },
+  pastBadge: { fontSize: 9, color: Colors.muted, fontFamily: Fonts.cinzel, letterSpacing: 1 },
   dashaTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' },
   dashaFill: { height: '100%', borderRadius: 2 },
 
@@ -572,11 +679,24 @@ const styles = StyleSheet.create({
   planetNak: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cormorantItalic, marginTop: 1 },
   dignityBadge: { fontSize: 10, fontFamily: Fonts.crimson, marginTop: 3 },
   planetRight: { alignItems: 'flex-end' },
-  amber: Colors.amber,
 
   // Shared
   tapHint: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel },
   lockIcon: { fontSize: 10, color: Colors.gold, fontFamily: Fonts.cinzel },
+
+  // Approximate mode banner
+  approxBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: 'rgba(224,123,57,0.08)', borderWidth: 1,
+    borderColor: 'rgba(224,123,57,0.4)', borderRadius: Radius.md,
+    padding: 12, marginHorizontal: Spacing.md, marginTop: 4,
+  },
+  approxBannerIcon: { fontSize: 16, color: Colors.amber },
+  approxBannerTitle: { fontSize: 12, fontFamily: Fonts.cinzel, color: Colors.amber, letterSpacing: 1 },
+  approxBannerText: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.crimson, marginTop: 2, lineHeight: 16 },
+  approxRetryBtn: { marginTop: 6, alignSelf: 'flex-start' },
+  approxRetryText: { fontSize: 11, fontFamily: Fonts.cinzel, color: Colors.amber, textDecorationLine: 'underline' },
+  approxRetryError: { fontSize: 10, color: Colors.muted, fontFamily: Fonts.crimson, marginTop: 3 },
 });
 
 const modalStyles = StyleSheet.create({

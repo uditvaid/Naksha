@@ -20,6 +20,7 @@ const ELEMENT_COLORS: Record<string, string> = {
 
 export default function ChineseScreen() {
   const user = useAppStore(s => s.user);
+  const saveReading = useAppStore(s => s.saveReading);
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +35,7 @@ export default function ChineseScreen() {
         <View style={styles.lockedState}>
           <Text style={styles.lockedIcon}>☯</Text>
           <Text style={styles.lockedTitle}>Chinese Astrology</Text>
-          <Text style={styles.lockedText}>Unlock BaZi Four Pillars, your animal sign analysis, elemental balance, and yearly luck cycles.</Text>
+          <Text style={styles.lockedText}>Unlock your Chinese astrology Year Pillar, animal sign analysis, elemental balance, and yearly luck cycles.</Text>
           <TouchableOpacity style={styles.unlockBtn} onPress={() => router.push('/paywall')}>
             <Text style={styles.unlockBtnText}>✦ Unlock with Premium</Text>
           </TouchableOpacity>
@@ -43,14 +44,15 @@ export default function ChineseScreen() {
     );
   }
 
-  const birthYear = user.birthData ? new Date(user.birthData.dateOfBirth).getFullYear() : 1989;
+  const birthYear = user.birthData ? new Date(user.birthData.dateOfBirth).getUTCFullYear() : 1989;
   const { animal, element } = getChineseZodiac(birthYear);
   const zodiacData = CHINESE_ZODIAC.find(z => z.name === animal);
   const elementColor = ELEMENT_COLORS[element.split(' ')[1] ?? 'Metal'] ?? Colors.gold;
 
-  // Simple BaZi pillars (simplified)
-  const birthDate = user.birthData ? new Date(user.birthData.dateOfBirth) : new Date(1989, 5, 4);
-  const baziPillars = `Year: ${element} ${animal} | Month: Calculating | Day: ${birthDate.getDate() % 10 + 1} | Hour: Calculating`;
+  // Year pillar is reliable from birth year. Month/Day/Hour pillars need a full ephemeris
+  // and exact birth time, which we don't compute in-app — the AI reading interprets the year pillar
+  // and the animal/element signature, which is what free-tier BaZi typically covers.
+  const baziPillars = `Year pillar: ${element} ${animal}`;
 
   const fetchReading = async () => {
     if (!user.birthData) return;
@@ -58,8 +60,14 @@ export default function ChineseScreen() {
     try {
       const result = await getChineseReading(user.birthData, animal, element, baziPillars);
       setReading(result);
-    } catch {
-      setReading('Unable to fetch reading. Please try again.');
+      saveReading({
+        type: 'chinese',
+        title: `${element} ${animal}`,
+        preview: result.slice(0, 120),
+        content: result,
+      });
+    } catch (e: any) {
+      setReading(`Unable to fetch reading: ${e?.message ?? 'Please check your connection and try again.'}`);
     } finally {
       setLoading(false);
     }
@@ -77,7 +85,7 @@ export default function ChineseScreen() {
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Chinese Astrology</Text>
-          <Text style={styles.subtitle}>四柱命理 · BaZi Four Pillars</Text>
+          <Text style={styles.subtitle}>四柱命理 · Chinese Astrology</Text>
         </View>
 
         {/* Animal Sign Hero */}
@@ -115,23 +123,22 @@ export default function ChineseScreen() {
           </Text>
         </View>
 
-        {/* BaZi Pillars */}
+        {/* Year Pillar */}
         <View style={styles.baziSection}>
-          <Text style={styles.sectionTitle}>FOUR PILLARS · 四柱</Text>
+          <Text style={styles.sectionTitle}>YEAR PILLAR · 年柱</Text>
           <View style={styles.pillarsRow}>
-            {['Year', 'Month', 'Day', 'Hour'].map(pillar => (
-              <View key={pillar} style={styles.pillarCard}>
-                <Text style={styles.pillarLabel}>{pillar}</Text>
-                <Text style={styles.pillarValue}>
-                  {pillar === 'Year' ? element.split(' ')[0][0] ?? '?' : '?'}
-                </Text>
-                <Text style={styles.pillarAnimal}>
-                  {pillar === 'Year' ? animal[0] : '?'}
-                </Text>
-              </View>
-            ))}
+            <View style={styles.pillarCard}>
+              <Text style={styles.pillarLabel}>Heavenly Stem</Text>
+              <Text style={styles.pillarValue}>{element.split(' ')[0] ?? ''}</Text>
+              <Text style={styles.pillarAnimal}>{(element.split(' ')[1] ?? '').toLowerCase()}</Text>
+            </View>
+            <View style={styles.pillarCard}>
+              <Text style={styles.pillarLabel}>Earthly Branch</Text>
+              <Text style={styles.pillarValue}>{ANIMAL_EMOJIS[animal] ?? '☯'}</Text>
+              <Text style={styles.pillarAnimal}>{animal}</Text>
+            </View>
           </View>
-          <Text style={styles.baziNote}>Full BaZi calculation requires exact birth time. Get your AI reading for interpretation.</Text>
+          <Text style={styles.baziNote}>Your Year Pillar anchors your Chinese astrology chart. The AI reading interprets how its energy shapes you.</Text>
         </View>
 
         {/* AI Reading button */}

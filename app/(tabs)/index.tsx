@@ -1,44 +1,83 @@
-import { useEffect, useState, useCallback, useRef, memo } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useAppStore } from '@store/userStore';
+import { useAppStore, onAppReset } from '@store/userStore';
+import { useShallow } from 'zustand/react/shallow';
 import { getDailyReading } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
-import { PLANETS } from '@constants/astrology';
+import { PLANETS_BY_ID } from '@constants/astrology';
+
+// Module-level cache survives tab unmounts — avoids refetching every time user navigates back.
+// Keyed on (date, userKey) so a profile reset / re-onboard invalidates the previous user's reading.
+let _dailyReadingCache: { date: string; userKey: string; text: string } | null = null;
+
+function userCacheKey(birthData: { name: string; dateOfBirth: string } | null): string {
+  if (!birthData) return '';
+  return `${birthData.name}|${birthData.dateOfBirth}`;
+}
+
+// Clear the module-level cache when the user resets/logs out so a re-onboarded user
+// does not see the previous user's daily reading until the app restarts.
+onAppReset(() => { _dailyReadingCache = null; });
 
 export default function HomeScreen() {
-  const birthData = useAppStore(s => s.user.birthData);
-  const chart = useAppStore(s => s.user.chart);
-  const isPremium = useAppStore(s => s.user.isPremium);
-  const [dailyReading, setDailyReading] = useState('');
+  const { birthData, chart, isPremium } = useAppStore(useShallow(s => ({
+    birthData: s.user.birthData,
+    chart: s.user.chart,
+    isPremium: s.user.isPremium,
+  })));
+  const initialKey = userCacheKey(birthData);
+  const [dailyReading, setDailyReading] = useState(
+    _dailyReadingCache?.date === new Date().toDateString() && _dailyReadingCache?.userKey === initialKey
+      ? _dailyReadingCache.text
+      : ''
+  );
   const [loadingReading, setLoadingReading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const cachedDateRef = useRef<string | null>(null);
 
-  const planets = chart?.planets ?? [];
-  const activeDasha = chart?.dashas?.find(d => d.isActive);
   const name = birthData?.name ?? 'Seeker';
   const firstName = name.split(' ')[0] ?? name;
 
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const chartPlanets = chart?.planets;
+  const chartDashas = chart?.dashas;
+  const chartDerived = useMemo(() => {
+    const planets = chartPlanets ?? [];
+    return {
+      planets,
+      moon: planets.find(p => p.planet === 'Moon'),
+      sun: planets.find(p => p.planet === 'Sun'),
+      activeDasha: chartDashas?.find(d => d.isActive),
+    };
+  }, [chartPlanets, chartDashas]);
+  const { planets, moon, sun, activeDasha } = chartDerived;
+
+  const { dateStr, greeting } = useMemo(() => {
+    const t = new Date();
+    const h = t.getHours();
+    return {
+      dateStr: t.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
+      greeting: h < 12 ? 'Suprabhat' : h < 17 ? 'Namaskar' : 'Shubh Sandhya',
+    };
+  }, []);
 
   const fetchDailyReading = useCallback(async (force = false) => {
     if (!birthData) return;
+    if (!isPremium) return; // Daily reading is a premium feature
     const todayKey = new Date().toDateString();
-    if (!force && cachedDateRef.current === todayKey && dailyReading) return;
+    const key = userCacheKey(birthData);
+    if (!force && _dailyReadingCache?.date === todayKey && _dailyReadingCache?.userKey === key) return;
     setLoadingReading(true);
     try {
       const reading = await getDailyReading(birthData, chart);
       setDailyReading(reading);
-      cachedDateRef.current = todayKey;
-    } catch (e) {
-      setDailyReading('The cosmic signal is momentarily unclear. Try again shortly.');
+      _dailyReadingCache = { date: todayKey, userKey: key, text: reading };
+    } catch (e: any) {
+      setDailyReading(`Unable to get reading: ${e?.message ?? 'Please try again shortly.'}`);
     } finally {
       setLoadingReading(false);
     }
-  }, [birthData, chart]);
+  }, [birthData, chart, isPremium]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -47,13 +86,6 @@ export default function HomeScreen() {
   };
 
   useEffect(() => { fetchDailyReading(); }, [fetchDailyReading]);
-
-  const getGreeting = () => {
-    const h = today.getHours();
-    if (h < 12) return 'Suprabhat';
-    if (h < 17) return 'Namaskar';
-    return 'Shubh Sandhya';
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -64,7 +96,7 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.greeting}>{greeting}</Text>
             <Text style={styles.name}>{firstName}</Text>
             <Text style={styles.date}>{dateStr}</Text>
           </View>
@@ -88,26 +120,39 @@ export default function HomeScreen() {
 
         {/* Quick Stats */}
         <View style={styles.statsRow}>
-          <StatCard label="Moon Sign" value={planets.find(p => p.planet === 'Moon')?.sign ?? '—'} sub={planets.find(p => p.planet === 'Moon')?.nakshatra ?? ''} />
+          <StatCard label="Moon Sign" value={moon?.sign ?? '—'} sub={moon?.nakshatra ?? ''} />
           <StatCard label="Mahadasha" value={activeDasha?.planet ?? '—'} sub={activeDasha ? `Until ${new Date(activeDasha.endDate).getFullYear()}` : ''} />
-          <StatCard label="Sun Sign" value={planets.find(p => p.planet === 'Sun')?.sign ?? '—'} sub={planets.find(p => p.planet === 'Sun')?.nakshatra ?? ''} />
+          <StatCard label="Sun Sign" value={sun?.sign ?? '—'} sub={sun?.nakshatra ?? ''} />
         </View>
 
-        {/* Daily Reading */}
+        {/* Daily Reading — premium-only */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>TODAY'S COSMIC READING</Text>
           <View style={styles.readingCard}>
-            {loadingReading ? (
+            {!isPremium ? (
+              <>
+                <Text style={styles.readingLocked}>
+                  Your personalised daily cosmic reading — calibrated to your chart and today's planetary energies — is part of Premium.
+                </Text>
+                <TouchableOpacity style={styles.readingUnlockBtn} onPress={() => router.push('/paywall')}>
+                  <Text style={styles.readingUnlockBtnText}>✦ Unlock with Premium</Text>
+                </TouchableOpacity>
+              </>
+            ) : loadingReading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={Colors.gold} size="small" />
                 <Text style={styles.loadingText}>Reading the stars…</Text>
               </View>
             ) : (
               <>
-                <Text style={styles.readingText}>{dailyReading || 'Tap refresh to receive your daily cosmic reading.'}</Text>
-                <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchDailyReading(true)}>
-                  <Text style={styles.refreshBtnText}>↻ Refresh Reading</Text>
-                </TouchableOpacity>
+                <Text style={styles.readingText}>
+                  {dailyReading || (birthData ? 'Tap refresh to receive your daily cosmic reading.' : 'Complete your birth details to unlock your daily reading.')}
+                </Text>
+                {birthData && (
+                  <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchDailyReading(true)}>
+                    <Text style={styles.refreshBtnText}>↻ Refresh Reading</Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>
@@ -116,12 +161,12 @@ export default function HomeScreen() {
         {/* Planet Grid */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>PLANETARY POSITIONS</Text>
-          {planets.slice(0, 7).map((p) => {
-            const planetData = PLANETS.find(pl => pl.id === p.planet.toLowerCase());
+          {planets.map((p) => {
+            const planetData = PLANETS_BY_ID.get(p.planet.toLowerCase());
             return (
               <View key={p.planet} style={styles.planetRow}>
-                <View style={[styles.planetDot, { backgroundColor: planetData?.color + '33' }]}>
-                  <Text style={[styles.planetSymbol, { color: planetData?.color }]}>
+                <View style={[styles.planetDot, { backgroundColor: (planetData?.color ?? Colors.gold) + '33' }]}>
+                  <Text style={[styles.planetSymbol, { color: planetData?.color ?? Colors.gold }]}>
                     {planetData?.symbol ?? p.planet[0]}
                   </Text>
                 </View>
@@ -228,6 +273,9 @@ const styles = StyleSheet.create({
   readingText: { fontSize: 15, lineHeight: 24, color: Colors.star, fontFamily: Fonts.crimson },
   refreshBtn: { marginTop: 12, alignSelf: 'flex-end' },
   refreshBtnText: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel },
+  readingLocked: { fontSize: 15, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 24, marginBottom: 12 },
+  readingUnlockBtn: { alignSelf: 'flex-start', backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.full, paddingHorizontal: 16, paddingVertical: 8 },
+  readingUnlockBtnText: { fontSize: 12, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 1 },
   planetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 12, marginBottom: 6 },
   planetDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   planetSymbol: { fontSize: 16 },

@@ -4,49 +4,83 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Font from 'expo-font';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { initRevenueCat, getCustomerInfo, isPremiumActive } from '../src/services/revenuecat';
+import { initRevenueCat, getCustomerInfo, isPremiumActive, addCustomerInfoListener } from '../src/services/revenuecat';
+import { requestNotificationPermissions, setupAndroidChannel, scheduleDailyInsightNotification } from '../src/services/notifications';
 import { useAppStore } from '../src/store/userStore';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const setPremium = useAppStore(s => s.setPremium);
+  const activeDashaLord = useAppStore(s => s.user.chart?.dashas?.find(d => d.isActive)?.planet);
   const [appReady, setAppReady] = useState(false);
+  const [notificationsGranted, setNotificationsGranted] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
     async function prepare() {
       try {
         // Load fonts
         await Font.loadAsync({
           Cinzel_400Regular: require('@expo-google-fonts/cinzel/400Regular/Cinzel_400Regular.ttf'),
           Cinzel_600SemiBold: require('@expo-google-fonts/cinzel/600SemiBold/Cinzel_600SemiBold.ttf'),
-          CormorantGaramond_300Light: require('@expo-google-fonts/cormorant-garamond/300Light/CormorantGaramond_300Light.ttf'),
           CormorantGaramond_400Regular: require('@expo-google-fonts/cormorant-garamond/400Regular/CormorantGaramond_400Regular.ttf'),
           CormorantGaramond_400Regular_Italic: require('@expo-google-fonts/cormorant-garamond/400Regular_Italic/CormorantGaramond_400Regular_Italic.ttf'),
-          CrimsonPro_300Light: require('@expo-google-fonts/crimson-pro/300Light/CrimsonPro_300Light.ttf'),
           CrimsonPro_400Regular: require('@expo-google-fonts/crimson-pro/400Regular/CrimsonPro_400Regular.ttf'),
         });
 
-        // Init RevenueCat
+        // Init RevenueCat — each step is isolated so a failed init still attempts customer lookup
         try {
           await initRevenueCat();
+        } catch (e) {
+          if (__DEV__) console.warn('RevenueCat init error (non-fatal):', e);
+        }
+        try {
           const customerInfo = await getCustomerInfo();
-          if (customerInfo) {
+          if (mounted && customerInfo) {
             setPremium(isPremiumActive(customerInfo), customerInfo.latestExpirationDate ?? undefined);
           }
         } catch (e) {
-          console.log('RevenueCat init error (non-fatal):', e);
+          if (__DEV__) console.warn('RevenueCat getCustomerInfo error (non-fatal):', e);
+        }
+
+        // Set up notification channel + permissions (non-blocking).
+        // Actual scheduling happens in a separate effect that depends on the active dasha,
+        // so it picks up chart updates after onboarding or chart regeneration.
+        try {
+          await setupAndroidChannel();
+          const granted = await requestNotificationPermissions();
+          if (mounted) setNotificationsGranted(granted);
+        } catch (e) {
+          if (__DEV__) console.warn('Notification setup error (non-fatal):', e);
         }
       } catch (e) {
-        console.warn('App prepare error:', e);
+        if (__DEV__) console.warn('App prepare error:', e);
       } finally {
-        // Always hide splash screen — never leave user stuck
-        setAppReady(true);
-        await SplashScreen.hideAsync();
+        if (mounted) setAppReady(true);
+        // hideAsync is safe to call even if unmounted — it's a one-shot platform call
+        try { await SplashScreen.hideAsync(); } catch { /* already hidden */ }
       }
     }
     prepare();
-  }, []);
+    return () => { mounted = false; };
+  }, [setPremium]);
+
+  // Re-schedule the daily insight notification whenever the active Mahadasha lord changes
+  // (after onboarding, chart regeneration, or a natural dasha transition).
+  useEffect(() => {
+    if (!notificationsGranted) return;
+    scheduleDailyInsightNotification(activeDashaLord).catch((e) => {
+      if (__DEV__) console.warn('Notification re-schedule error (non-fatal):', e);
+    });
+  }, [notificationsGranted, activeDashaLord]);
+
+  useEffect(() => {
+    return addCustomerInfoListener((info) => {
+      setPremium(isPremiumActive(info), info.latestExpirationDate ?? undefined);
+    });
+  }, [setPremium]);
 
   if (!appReady) return null;
 

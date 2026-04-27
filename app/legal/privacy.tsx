@@ -38,7 +38,7 @@ export default function PrivacyPolicyScreen() {
           {'\n'}- Vedic birth chart data (Lagna, planetary positions, Nakshatras, Dasha periods, Yogas)
           {'\n'}- Navamsha (divisional) chart data
           {'\n'}- Numerology calculations (Life Path, Destiny, Soul Urge, Personality, Birthday numbers)
-          {'\n'}- Chinese astrology profile (zodiac animal, element, BaZi pillars)
+          {'\n'}- Chinese astrology profile (zodiac animal, element, year pillar)
           {'\n'}- AI-generated readings and analysis
           {'\n\n'}<Bold>c) Images</Bold>
           {'\n'}- Palm photographs taken or selected for palmistry analysis are processed temporarily and
@@ -78,8 +78,10 @@ export default function PrivacyPolicyScreen() {
           The App communicates with the following third-party services to provide its features:
           {'\n\n'}<Bold>a) Anthropic (Claude API)</Bold>
           {'\n'}Your birth data, chart data, and questions are sent to Anthropic's Claude API to generate
-          AI-powered readings. Palm images are sent as base64-encoded data for analysis. Anthropic's
-          privacy policy governs their handling of this data.
+          AI-powered readings. Palm images are sent as base64-encoded data for analysis. When you use the
+          Compatibility feature, the birth details you enter for your partner are also transmitted to
+          Anthropic as part of the compatibility analysis. Anthropic's privacy policy governs their
+          handling of this data.
           {'\n\n'}<Bold>b) Prokerala Astrology API</Bold>
           {'\n'}Your birth date, time, and coordinates are sent to Prokerala to calculate your Vedic birth
           chart, planetary positions, Dasha periods, and Yogas.
@@ -121,9 +123,6 @@ export default function PrivacyPolicyScreen() {
           {'\n\n'}<Bold>Delete the App</Bold>
           {'\n'}Uninstalling the App removes all locally stored data. Since we do not store data on
           external servers, deletion is complete and irreversible.
-          {'\n\n'}<Bold>Notifications</Bold>
-          {'\n'}You can enable or disable daily cosmic alert notifications from the Profile settings at
-          any time.
           {'\n\n'}<Bold>Camera & Photo Access</Bold>
           {'\n'}Camera and photo library access is requested only when you use the palm reading feature.
           You can revoke these permissions at any time through your device settings.
@@ -156,7 +155,7 @@ export default function PrivacyPolicyScreen() {
 
         <Section title="12. Contact Us">
           If you have questions about this Privacy Policy or your data, please contact us at:
-          {'\n\n'}Email: privacy@nakshatra.app
+          {'\n\n'}Email: nakshaguide@gmail.com
         </Section>
 
         <View style={{ height: 100 }} />

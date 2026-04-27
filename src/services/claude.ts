@@ -14,12 +14,34 @@ import { ANTHROPIC_API_KEY } from '@constants/config';
 import { deriveUserPersona, buildDynamicGuruPrompt } from './personaEngine';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-20250514';
+const MODEL = 'claude-sonnet-4-5';
 const API_KEY = ANTHROPIC_API_KEY;
+const REQUEST_TIMEOUT_MS = 30000;
 
 interface ClaudeMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+function requireApiKey() {
+  if (!API_KEY) {
+    throw new Error('AI readings are temporarily unavailable. Please update the app and try again.');
+  }
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new Error('The reading took too long. Please check your connection and try again.');
+    }
+    throw new Error('Could not reach the reading service. Please check your connection and try again.');
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function callClaude(
@@ -27,7 +49,9 @@ async function callClaude(
   messages: ClaudeMessage[],
   maxTokens = 1024
 ): Promise<string> {
-  const response = await fetch(API_URL, {
+  requireApiKey();
+
+  const response = await fetchWithTimeout(API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -35,7 +59,7 @@ async function callClaude(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages }),
-  });
+  }, REQUEST_TIMEOUT_MS);
 
   if (!response.ok) {
     let errMessage = 'Service temporarily unavailable. Please try again.';
@@ -97,7 +121,7 @@ function defaultGuruSystem(): string {
 function formatDate(dateStr: string): string {
   try {
     return new Date(dateStr).toLocaleDateString('en-US', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
     });
   } catch { return dateStr; }
 }
@@ -161,11 +185,13 @@ export async function analyzePalm(
   birthData: BirthData,
   hand: 'left' | 'right'
 ): Promise<string> {
+  requireApiKey();
+
   const handContext = hand === 'left'
     ? 'the left hand — which in Hasta Samudrika Shastra reveals karma inherited from past lives, soul tendencies, and the blueprint of constitution at birth'
     : 'the right hand — which reveals what the soul is actively building: the karma being shaped through present-life choices and dharmic effort';
 
-  const response = await fetch(API_URL, {
+  const response = await fetchWithTimeout(API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -190,7 +216,7 @@ Write in plain, warm English that anyone can understand. Be specific to what you
         ],
       }],
     }),
-  });
+  }, REQUEST_TIMEOUT_MS);
 
   if (!response.ok) throw new Error('Palm reading service temporarily unavailable.');
   const data = await response.json();

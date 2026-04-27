@@ -382,7 +382,7 @@ NUMEROLOGY
 Discover your Life Path, Destiny, Soul Urge, Personality, and Birthday numbers through both Pythagorean and Chaldean systems.
 
 CHINESE ASTROLOGY
-Explore your Chinese zodiac animal, elemental balance, and BaZi Four Pillars profile with yearly luck cycle analysis.
+Explore your Chinese zodiac animal, elemental balance, and Year Pillar profile with yearly luck cycle analysis.
 
 LAL KITAB REMEDIES
 Receive personalized Lal Kitab remedies (upay) — simple, practical everyday actions to harmonize your planetary energies.
@@ -453,7 +453,7 @@ Premium features (subscription required):
 - Unlimited AI Guru conversations
 - Palm reading via camera/photo
 - Numerology analysis
-- Chinese astrology (BaZi Four Pillars)
+- Chinese astrology (Year Pillar)
 - Lal Kitab remedies
 - Compatibility (Ashtakoota) analysis
 

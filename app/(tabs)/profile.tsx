@@ -1,37 +1,60 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import Constants from 'expo-constants';
 import { useAppStore } from '@store/userStore';
 import { restorePurchases, isPremiumActive } from '@services/revenuecat';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { PLANETS } from '@constants/astrology';
+import { TEST_MODE, BUILD_PROFILE, ANTHROPIC_API_KEY, PROKERALA_CLIENT_ID, REVENUECAT_IOS_KEY } from '@constants/config';
+import { getDailyReading } from '@services/claude';
+import { generateChart } from '@services/prokerala';
+
+const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
 export default function ProfileScreen() {
   const user = useAppStore(s => s.user);
-  const setUser = useAppStore(s => s.setUser);
   const setPremium = useAppStore(s => s.setPremium);
+  const setChart = useAppStore(s => s.setChart);
   const reset = useAppStore(s => s.reset);
-
-  const [notifications, setNotifications] = useState(user.notificationsEnabled);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   const birthData = user.birthData;
   const chart = user.chart;
   const activeDasha = chart?.dashas?.find(d => d.isActive);
   const moonPlanet = chart?.planets?.find(p => p.planet === 'Moon');
 
-  const toggleNotifications = (val: boolean) => {
-    setNotifications(val);
-    setUser({ notificationsEnabled: val });
+  const handleRestorePurchases = async () => {
+    try {
+      const info = await restorePurchases();
+      if (info && isPremiumActive(info)) {
+        setPremium(true, info.latestExpirationDate ?? undefined);
+        Alert.alert('Restored!', 'Your premium access has been restored.');
+      } else {
+        Alert.alert('No Purchases Found', 'No active premium subscriptions found for this account.');
+      }
+    } catch {
+      Alert.alert(
+        'Restore Failed',
+        'We couldn\'t reach the App Store to restore your purchases. Please check your connection and try again.',
+      );
+    }
   };
 
-  const handleRestorePurchases = async () => {
-    const info = await restorePurchases();
-    if (info && isPremiumActive(info)) {
-      setPremium(true, info.latestExpirationDate ?? undefined);
-      Alert.alert('Restored!', 'Your premium access has been restored.');
-    } else {
-      Alert.alert('No Purchases Found', 'No active premium subscriptions found for this account.');
+  const handleRegenerateChart = async () => {
+    if (!birthData) return;
+    setRegenerating(true);
+    try {
+      const newChart = await generateChart(birthData);
+      setChart(newChart);
+      Alert.alert('Chart Updated', 'Your birth chart has been recalculated from your saved birth data.');
+    } catch {
+      Alert.alert('Recalculation Failed', 'Could not reach the astrology server. Please check your connection and try again.');
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -86,15 +109,22 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>BIRTH DETAILS</Text>
             <View style={styles.detailsCard}>
               <DetailRow label="Name" value={birthData.name} />
-              <DetailRow label="Date of Birth" value={new Date(birthData.dateOfBirth).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })} />
+              <DetailRow label="Date of Birth" value={new Date(birthData.dateOfBirth).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric', timeZone: 'UTC' })} />
               <DetailRow label="Time of Birth" value={birthData.timeOfBirth || 'Not set'} />
               <DetailRow label="Place of Birth" value={birthData.placeOfBirth || 'Not set'} />
               {chart?.lagna && <DetailRow label="Lagna" value={`${chart.lagna} (Ascendant)`} />}
               {activeDasha && <DetailRow label="Active Dasha" value={`${activeDasha.planet} Mahadasha`} last />}
             </View>
-            <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/onboarding')}>
-              <Text style={styles.editBtnText}>Edit Birth Data</Text>
-            </TouchableOpacity>
+            <View style={styles.editBtnRow}>
+              <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/onboarding')}>
+                <Text style={styles.editBtnText}>Edit Birth Data</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.editBtn} onPress={handleRegenerateChart} disabled={regenerating}>
+                {regenerating
+                  ? <ActivityIndicator size="small" color={Colors.gold} />
+                  : <Text style={styles.editBtnText}>Regenerate Chart</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -103,7 +133,7 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>CHART SNAPSHOT</Text>
             <View style={styles.planetMiniGrid}>
-              {chart.planets.slice(0, 6).map(p => {
+              {chart.planets.map(p => {
                 const pd = PLANETS.find(pl => pl.id === p.planet.toLowerCase());
                 return (
                   <View key={p.planet} style={styles.planetMiniCard}>
@@ -135,25 +165,6 @@ export default function ProfileScreen() {
             ))}
           </View>
         )}
-
-        {/* Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SETTINGS</Text>
-          <View style={styles.settingsCard}>
-            <View style={styles.settingRow}>
-              <View>
-                <Text style={styles.settingLabel}>Daily Cosmic Alerts</Text>
-                <Text style={styles.settingDesc}>Personalized planetary notifications</Text>
-              </View>
-              <Switch
-                value={notifications}
-                onValueChange={toggleNotifications}
-                trackColor={{ false: Colors.card, true: Colors.goldDim }}
-                thumbColor={notifications ? Colors.gold : Colors.muted}
-              />
-            </View>
-          </View>
-        </View>
 
         {/* Account */}
         <View style={styles.section}>
@@ -187,7 +198,95 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text style={styles.version}>Naksha v1.0.0 · Made with ॐ</Text>
+        {TEST_MODE && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>⚠ TESTING · {BUILD_PROFILE.toUpperCase()} BUILD</Text>
+            <View style={styles.accountList}>
+              <TouchableOpacity
+                style={styles.accountRow}
+                onPress={() => setPremium(!user.isPremium, undefined)}
+              >
+                <Text style={[styles.accountRowText, { color: Colors.amber }]}>
+                  {user.isPremium ? '↓ Disable Premium (Test)' : '↑ Enable Premium (Test)'}
+                </Text>
+                <Text style={styles.accountRowArrow}>↔</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.accountRow}
+                onPress={async () => {
+                  setTestingConnection(true);
+                  setConnectionResult(null);
+                  try {
+                    if (!user.birthData) throw new Error('No birth data — complete onboarding first');
+                    await getDailyReading(user.birthData, user.chart);
+                    setConnectionResult('Claude API: Connected successfully');
+                  } catch (e: any) {
+                    setConnectionResult(`Claude API error: ${e?.message ?? 'Unknown error'}`);
+                  } finally {
+                    setTestingConnection(false);
+                  }
+                }}
+                disabled={testingConnection}
+              >
+                <Text style={[styles.accountRowText, { color: Colors.sapphire ?? Colors.gold }]}>
+                  Test Claude Connection
+                </Text>
+                {testingConnection
+                  ? <ActivityIndicator size="small" color={Colors.gold} />
+                  : <Text style={styles.accountRowArrow}>▶</Text>}
+              </TouchableOpacity>
+            </View>
+
+            {/* API key presence diagnostics */}
+            <View style={styles.diagBox}>
+              <Text style={styles.diagTitle}>API KEYS IN THIS BUILD</Text>
+              <Text style={[styles.diagRow, { color: ANTHROPIC_API_KEY ? Colors.emerald ?? '#34D399' : Colors.ruby }]}>
+                Anthropic: {ANTHROPIC_API_KEY ? '✓ Present' : '✗ MISSING'}
+              </Text>
+              <Text style={[styles.diagRow, { color: PROKERALA_CLIENT_ID ? Colors.emerald ?? '#34D399' : Colors.ruby }]}>
+                Prokerala: {PROKERALA_CLIENT_ID ? '✓ Present' : '✗ MISSING'}
+              </Text>
+              <Text style={[styles.diagRow, { color: REVENUECAT_IOS_KEY ? Colors.emerald ?? '#34D399' : Colors.ruby }]}>
+                RevenueCat: {REVENUECAT_IOS_KEY ? '✓ Present' : '✗ MISSING'}
+              </Text>
+              {connectionResult && (
+                <Text style={[styles.diagRow, {
+                  color: connectionResult.includes('error') ? Colors.ruby : Colors.emerald ?? '#34D399',
+                  marginTop: 6,
+                }]}>
+                  {connectionResult}
+                </Text>
+              )}
+            </View>
+
+            <Text style={styles.testNote}>
+              This toggle only exists in non-production builds so features can be exercised
+              without a working App Store IAP configuration. It will not ship to the App Store.
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          onLongPress={() => {
+            // Developer toggle is only available in non-production (TEST_MODE) builds.
+            // Long-pressing the version label in production is a no-op.
+            if (!TEST_MODE) return;
+            Alert.alert(
+              'Developer Options',
+              `Premium: ${user.isPremium ? 'ON' : 'OFF'}\nBuild: ${BUILD_PROFILE}`,
+              [
+                {
+                  text: user.isPremium ? 'Disable Premium' : 'Enable Premium',
+                  onPress: () => setPremium(!user.isPremium, undefined),
+                },
+                { text: 'Cancel', style: 'cancel' },
+              ]
+            );
+          }}
+          activeOpacity={1}
+        >
+          <Text style={styles.version}>Naksha v{appVersion} · Made with ॐ</Text>
+        </TouchableOpacity>
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
@@ -227,7 +326,8 @@ const styles = StyleSheet.create({
   detailRowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   detailLabel: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cinzel, flex: 1 },
   detailValue: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, flex: 2, textAlign: 'right' },
-  editBtn: { marginTop: 8, alignSelf: 'flex-end' },
+  editBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, marginTop: 8 },
+  editBtn: { alignSelf: 'flex-end' },
   editBtnText: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },
   planetMiniGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   planetMiniCard: { width: '30%', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 10, alignItems: 'center', gap: 3 },
@@ -240,14 +340,14 @@ const styles = StyleSheet.create({
   savedChartAvatarText: { fontSize: 18, fontFamily: Fonts.cinzel, color: Colors.gold },
   savedChartName: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star },
   savedChartRel: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic },
-  settingsCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
-  settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  settingLabel: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star },
-  settingDesc: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.crimson, marginTop: 2 },
   accountList: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, overflow: 'hidden' },
   accountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   accountRowDanger: { borderBottomWidth: 0 },
   accountRowText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star, flex: 1 },
   accountRowArrow: { fontSize: 16, color: Colors.muted },
   version: { textAlign: 'center', fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginBottom: 8 },
+  testNote: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, paddingHorizontal: 4, paddingTop: 8, lineHeight: 16 },
+  diagBox: { marginTop: 10, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: Radius.md, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  diagTitle: { fontSize: 9, letterSpacing: 1.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 6 },
+  diagRow: { fontSize: 12, fontFamily: Fonts.crimson, lineHeight: 20 },
 });

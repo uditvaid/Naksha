@@ -4,30 +4,85 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
+import { useShallow } from 'zustand/react/shallow';
 import { askGuru } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { FREE_GURU_QUESTIONS_PER_DAY } from '@constants/astrology';
 
-const SUGGESTED_QUESTIONS = [
-  'What does my current Mahadasha mean for me?',
-  'What are my strongest yogas?',
-  'When is my best window for major decisions?',
-  'What is my dharma in this lifetime?',
-  'How should I prepare for Saturn Mahadasha?',
-  'What do my 8th house planets mean?',
-  'Which gemstone should I wear?',
-  'What is my soul\'s purpose?',
+const DASHA_QUESTIONS: Record<string, string[]> = {
+  Sun: [
+    'You are in your Sun period — a time of identity and authority. Where in your life are you still dimming your light to keep others comfortable?',
+    'The Sun rules your father and the authority figures in your life. What unresolved patterns from these relationships still shape how you lead?',
+    'This period asks you to be seen. What would you do differently if you stopped seeking external validation?',
+  ],
+  Moon: [
+    'You are in your Moon period — a deeply feeling time. What emotional truth have you been too afraid to acknowledge?',
+    'The Moon governs your inner world and your mother. What old emotional wound is quietly asking to be healed right now?',
+    'Your mind is your most powerful tool in this period. In what ways are your thoughts creating your reality — for better or worse?',
+  ],
+  Mars: [
+    'You are in your Mars period — a time of courage and decisive action. What have you been postponing out of fear that you know you must face?',
+    'Mars rules property, siblings, and ambition. Where are you holding back from asserting what is rightfully yours?',
+    'This period rewards bold action. What is the one decisive step you have been circling around but never taking?',
+  ],
+  Mercury: [
+    'You are in your Mercury period — a time of the mind and communication. What truth are you struggling to articulate clearly in your life?',
+    'Mercury governs business, learning, and adaptability. Where is overthinking or scattered energy holding you back from real progress?',
+    'This period favours skill-building. What knowledge, if mastered now, would transform the next decade of your life?',
+  ],
+  Jupiter: [
+    'You are in your Jupiter period — a time of growth and grace. What old belief about yourself is too small for who you are becoming?',
+    'Jupiter governs wisdom and expansion. Who or what is currently your greatest teacher, and are you truly listening?',
+    'This period asks you to be generous with your gifts. Where are you hoarding your wisdom or abundance out of fear?',
+  ],
+  Venus: [
+    'You are in your Venus period — a time of love and creativity. Where in your life are you denying yourself beauty, pleasure, or deep connection?',
+    'Venus governs relationships and values. What would you need to believe about yourself to receive the love you truly desire?',
+    'This period rewards authenticity. Where are you performing a version of yourself rather than allowing yourself to be fully known?',
+  ],
+  Saturn: [
+    'You are in your Saturn period — the great teacher. What responsibility have you been avoiding that Saturn is now placing squarely in front of you?',
+    'Saturn rewards those who do the work. Where are you expecting results without sustained, consistent effort?',
+    'This period builds lasting foundations. What needs to be stripped away so something more enduring can be built in its place?',
+  ],
+  Rahu: [
+    'You are in your Rahu period — a time of ambition and transformation. Where are you chasing something that looks like success but doesn\'t align with your soul?',
+    'Rahu magnifies worldly desire. What craving in your life, if examined honestly, is driven more by fear than genuine longing?',
+    'This period brings sudden shifts. What identity or belief about yourself are you being asked to completely release?',
+  ],
+  Ketu: [
+    'You are in your Ketu period — a time of release and spiritual deepening. What are you still clinging to that your soul is asking you to let go of?',
+    'Ketu dissolves what no longer serves. Which relationship, habit, or worldly ambition are you investing in that no longer has a genuine future?',
+    'This period turns attention inward. What spiritual question has been quietly growing in you that you have been afraid to sit with?',
+  ],
+};
+
+const FALLBACK_QUESTIONS = [
+  'What is the deepest question your soul is asking right now?',
+  'Where in your life do you feel most out of alignment with your true purpose?',
+  'What pattern keeps repeating in your life, and what might it be trying to teach you?',
 ];
 
-const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+function getDashaQuestions(chart: any): { questions: string[]; dashaLord?: string } {
+  const activeDasha = chart?.dashas?.find((d: any) => d.isActive);
+  if (!activeDasha) return { questions: FALLBACK_QUESTIONS };
+  const questions = DASHA_QUESTIONS[activeDasha.planet] ?? FALLBACK_QUESTIONS;
+  return { questions, dashaLord: activeDasha.planet };
+}
+
+const genId = () => crypto.randomUUID();
 
 export default function GuruScreen() {
-  const birthData = useAppStore(s => s.user.birthData);
-  const chart = useAppStore(s => s.user.chart);
-  const isPremium = useAppStore(s => s.user.isPremium);
-  const guruQuestionsToday = useAppStore(s => s.user.guruQuestionsToday);
-  const lastGuruDate = useAppStore(s => s.user.lastGuruDate);
-  const messages = useAppStore(s => s.guruMessages);
+  const {
+    birthData, chart, isPremium, guruQuestionsToday, lastGuruDate, messages,
+  } = useAppStore(useShallow(s => ({
+    birthData: s.user.birthData,
+    chart: s.user.chart,
+    isPremium: s.user.isPremium,
+    guruQuestionsToday: s.user.guruQuestionsToday,
+    lastGuruDate: s.user.lastGuruDate,
+    messages: s.guruMessages,
+  })));
   const addMessage = useAppStore(s => s.addGuruMessage);
   const incrementQuestions = useAppStore(s => s.incrementGuruQuestions);
   const canAsk = useAppStore(s => s.canAskGuru);
@@ -107,7 +162,7 @@ export default function GuruScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>Jyotish Guru</Text>
+            <Text style={styles.title}>Guru</Text>
             <Text style={styles.subtitle}>Your personal Vedic guide</Text>
           </View>
           <View style={styles.headerRight}>
@@ -131,7 +186,7 @@ export default function GuruScreen() {
           contentContainerStyle={{ paddingBottom: 16 }}
         >
           {messages.length === 0 ? (
-            <WelcomeState onSelect={(q) => sendMessage(q)} />
+            <WelcomeState onSelect={(q) => sendMessage(q)} {...getDashaQuestions(chart)} />
           ) : (
             messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
@@ -179,16 +234,18 @@ export default function GuruScreen() {
   );
 }
 
-function WelcomeState({ onSelect }: { onSelect: (q: string) => void }) {
+function WelcomeState({ onSelect, questions, dashaLord }: { onSelect: (q: string) => void; questions: string[]; dashaLord?: string }) {
   return (
     <View style={styles.welcome}>
       <Text style={styles.welcomeIcon}>🔱</Text>
-      <Text style={styles.welcomeTitle}>Jyotish Guru</Text>
+      <Text style={styles.welcomeTitle}>Guru</Text>
       <Text style={styles.welcomeText}>
         Ask about your chart, timing, relationships, career, dharma, gemstones, or anything on your spiritual path. Readings are grounded in classical Vedic texts and offered as spiritual guidance.
       </Text>
-      <Text style={styles.suggestLabel}>SUGGESTED QUESTIONS</Text>
-      {SUGGESTED_QUESTIONS.map((q) => (
+      <Text style={styles.suggestLabel}>
+        {dashaLord ? `QUESTIONS FOR YOUR ${dashaLord.toUpperCase()} PERIOD` : 'REFLECT ON THIS'}
+      </Text>
+      {questions.map((q) => (
         <TouchableOpacity key={q} style={styles.suggestion} onPress={() => onSelect(q)}>
           <Text style={styles.suggestionText}>{q}</Text>
         </TouchableOpacity>

@@ -29,7 +29,6 @@ export default function NumerologyScreen() {
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
   const [numbers, setNumbers] = useState<Record<string, number> | null>(null);
-  const [saved, setSaved] = useState(false);
 
   if (!user.isPremium) {
     return (
@@ -60,7 +59,7 @@ export default function NumerologyScreen() {
     const lifePathNumber = calculateLifePathNumber(user.birthData.dateOfBirth);
     const destinyNumber = calculateDestinyNumber(name);
     const soulUrgeNumber = calculateSoulUrge(name);
-    const rawBirthday = new Date(user.birthData.dateOfBirth).getDate();
+    const rawBirthday = new Date(user.birthData.dateOfBirth).getUTCDate();
     let birthdayNumber = rawBirthday;
     while (birthdayNumber > 9 && birthdayNumber !== 11 && birthdayNumber !== 22) {
       birthdayNumber = birthdayNumber.toString().split('').map(Number).reduce((a, b) => a + b, 0);
@@ -73,15 +72,14 @@ export default function NumerologyScreen() {
     try {
       const result = await getNumerologyReading(user.birthData, name, nums);
       setReading(result);
-      setSaved(false);
       saveReading({
         type: 'numerology',
         title: `Numerology — ${name}`,
         preview: result.slice(0, 120) + '…',
         content: result,
       });
-    } catch {
-      setReading('Unable to fetch reading. Your numbers are calculated above.');
+    } catch (e: any) {
+      setReading(`Unable to fetch reading: ${e?.message ?? 'Your numbers are calculated above.'}`);
     } finally {
       setLoading(false);
     }
@@ -110,7 +108,7 @@ export default function NumerologyScreen() {
             autoCapitalize="words"
           />
           <Text style={styles.inputHint}>
-            Date of birth: {user.birthData?.dateOfBirth ? new Date(user.birthData.dateOfBirth).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not set'}
+            Date of birth: {user.birthData?.dateOfBirth ? new Date(user.birthData.dateOfBirth).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }) : 'Not set'}
           </Text>
           <TouchableOpacity
             style={[styles.calcBtn, !name.trim() && styles.calcBtnDisabled]}
@@ -194,6 +192,10 @@ const styles = StyleSheet.create({
   primaryNumberTitle: { fontSize: 22, fontFamily: Fonts.cinzel, color: Colors.star, marginBottom: 6 },
   primaryNumberTraits: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.cormorantItalic },
   readingCard: { margin: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.md },
-  readingLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, textAlign: 'center', marginBottom: Spacing.md },
+  readingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.md },
+  readingLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, flex: 1 },
+  saveBtn: { backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 6 },
+  saveBtnSaved: { backgroundColor: Colors.emerald + '22', borderColor: Colors.emerald },
+  saveBtnText: { fontSize: 11, fontFamily: Fonts.cinzel, color: Colors.gold },
   readingText: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 26 },
 });

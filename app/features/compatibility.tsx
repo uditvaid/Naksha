@@ -8,9 +8,37 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { getCompatibilityReading } from '@services/claude';
-import { geocodePlace, generateChart } from '@services/prokerala';
+import { geocodePlace, generateChart, PlaceNotFoundError } from '@services/prokerala';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import type { BirthData, ChartData } from '@store/userStore';
+
+const PLACE_PART_RE = /^[\p{L}\s\.\-']+$/u;
+type PlaceValidation = { ok: true } | { ok: false; message: string };
+function validatePartnerPlace(raw: string): PlaceValidation {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return {
+      ok: false,
+      message: 'Please enter your partner\'s place of birth (city and country).\n\nExamples: Delhi, India · Columbus, Ohio, USA · London, UK',
+    };
+  }
+  const parts = trimmed.split(',').map(p => p.trim());
+  if (parts.length < 2) {
+    return {
+      ok: false,
+      message: 'Please include both city and country, separated by a comma.\n\nExamples: Delhi, India · Columbus, Ohio, USA',
+    };
+  }
+  for (const p of parts) {
+    if (p.length < 2 || !PLACE_PART_RE.test(p)) {
+      return {
+        ok: false,
+        message: 'Each part should be at least 2 letters and contain only letters, spaces, dots, hyphens, or apostrophes.',
+      };
+    }
+  }
+  return { ok: true };
+}
 
 export default function CompatibilityScreen() {
   const user = useAppStore(s => s.user);
@@ -19,6 +47,9 @@ export default function CompatibilityScreen() {
   const [partnerName, setPartnerName] = useState('');
   const [partnerDate, setPartnerDate] = useState<Date>(new Date(1990, 0, 1));
   const [partnerTime, setPartnerTime] = useState<Date>(new Date(1990, 0, 1, 12, 0));
+  // partnerPickerTime holds the spinner's in-flight value; copied to partnerTime only on Confirm.
+  // Prevents iOS spinner's spurious onChange-on-mount from clobbering partnerTime with device time.
+  const [partnerPickerTime, setPartnerPickerTime] = useState<Date>(new Date(1990, 0, 1, 12, 0));
   const [dateConfirmed, setDateConfirmed] = useState(false);
   const [timeConfirmed, setTimeConfirmed] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -27,7 +58,7 @@ export default function CompatibilityScreen() {
   const [reading, setReading] = useState('');
   const [score, setScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [partnerChartFailed, setPartnerChartFailed] = useState(false);
 
   if (!user.isPremium) {
     return (
@@ -52,12 +83,12 @@ export default function CompatibilityScreen() {
   }
 
   const formatDateDisplay = (d: Date) =>
-    d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 
   const formatDateISO = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
 
@@ -84,27 +115,31 @@ export default function CompatibilityScreen() {
       return;
     }
 
-    if (partnerPlace.trim()) {
-      const parts = partnerPlace.split(',').map(p => p.trim());
-      const invalidPart = parts.find(p => !p || !/^[a-zA-Z\s\.\-']+$/.test(p));
-      if (invalidPart !== undefined) {
-        Alert.alert(
-          'Invalid Place',
-          'Please enter a valid place with city, state, or country (letters only).\n\nExamples: Delhi, India · Columbus, Ohio · London, UK',
-        );
-        return;
-      }
+    const placeCheck = validatePartnerPlace(partnerPlace);
+    if (!placeCheck.ok) {
+      Alert.alert('Partner\'s Place of Birth', placeCheck.message);
+      return;
     }
 
     setLoading(true);
-    setSaved(false);
     setScore(null);
 
-    const place = partnerPlace.trim() || 'Delhi';
-    let geo = { latitude: 28.6139, longitude: 77.2090, timezone: 'Asia/Kolkata' };
+    const place = partnerPlace.trim();
+    let geo;
     try {
       geo = await geocodePlace(place);
-    } catch { /* use default */ }
+    } catch (e) {
+      setLoading(false);
+      if (e instanceof PlaceNotFoundError) {
+        Alert.alert(
+          'Place Not Found',
+          'We couldn\'t find that location. Please enter a more specific place with both city and country.',
+        );
+      } else {
+        Alert.alert('Network Error', 'Could not reach the location service. Please check your connection and try again.');
+      }
+      return;
+    }
 
     const partnerData: BirthData = {
       name: partnerName.trim(),
@@ -117,10 +152,13 @@ export default function CompatibilityScreen() {
     };
 
     // Generate partner's chart
+    setPartnerChartFailed(false);
     let partnerChart: ChartData | null = null;
     try {
       partnerChart = await generateChart(partnerData);
-    } catch { /* proceed without chart */ }
+    } catch {
+      setPartnerChartFailed(true);
+    }
 
     try {
       const result = await getCompatibilityReading(
@@ -133,23 +171,17 @@ export default function CompatibilityScreen() {
         setScore(parseFloat(scoreMatch[1]));
       }
       setReading(result);
-    } catch {
-      Alert.alert('Error', 'Unable to complete the analysis. Please check your connection and try again.');
+      saveReading({
+        type: 'compatibility',
+        title: `You & ${partnerName.trim()}`,
+        preview: result.slice(0, 120) + '…',
+        content: result,
+      });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Unable to complete the analysis. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSave = () => {
-    if (!reading) return;
-    saveReading({
-      type: 'compatibility',
-      title: `You & ${partnerName}`,
-      preview: reading.slice(0, 120) + '…',
-      content: reading,
-    });
-    setSaved(true);
-    Alert.alert('Saved ✦', 'This reading has been saved to your profile.');
   };
 
   const myInitial = user.birthData?.name?.[0]?.toUpperCase() ?? 'U';
@@ -270,7 +302,10 @@ export default function CompatibilityScreen() {
             <Text style={styles.fieldLabel}>Time of Birth (for accurate chart)</Text>
             <TouchableOpacity
               style={[styles.datePickerBtn, timeConfirmed && styles.datePickerBtnFilled]}
-              onPress={() => setShowTimePicker(!showTimePicker)}
+              onPress={() => {
+                setPartnerPickerTime(partnerTime);
+                setShowTimePicker(!showTimePicker);
+              }}
             >
               <Text style={[styles.datePickerText, !timeConfirmed && { color: Colors.muted }]}>
                 {timeConfirmed ? formatTimeDisplay(partnerTime) : 'Tap to select time'}
@@ -281,14 +316,11 @@ export default function CompatibilityScreen() {
             {showTimePicker && (
               <View style={styles.pickerWrap}>
                 <DateTimePicker
-                  value={partnerTime}
+                  value={partnerPickerTime}
                   mode="time"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={(_, time) => {
-                    if (time) {
-                      setPartnerTime(time);
-                      setTimeConfirmed(true);
-                    }
+                    if (time) setPartnerPickerTime(time);
                   }}
                   textColor={Colors.star}
                   themeVariant="dark"
@@ -296,6 +328,7 @@ export default function CompatibilityScreen() {
                 <TouchableOpacity
                   style={styles.confirmBtn}
                   onPress={() => {
+                    setPartnerTime(partnerPickerTime);
                     setTimeConfirmed(true);
                     setShowTimePicker(false);
                   }}
@@ -306,7 +339,7 @@ export default function CompatibilityScreen() {
             )}
 
             {/* Place field */}
-            <Text style={styles.fieldLabel}>Place of Birth (optional)</Text>
+            <Text style={styles.fieldLabel}>Place of Birth *</Text>
             <TextInput
               style={styles.input}
               value={partnerPlace}
@@ -359,16 +392,12 @@ export default function CompatibilityScreen() {
           {/* Reading result */}
           {reading !== '' && (
             <View style={styles.readingSection}>
-              <View style={styles.readingHeader}>
-                <Text style={styles.readingLabel}>YOUR COMPATIBILITY READING</Text>
-                <TouchableOpacity
-                  style={[styles.saveBtn, saved && styles.saveBtnSaved]}
-                  onPress={handleSave}
-                  disabled={saved}
-                >
-                  <Text style={styles.saveBtnText}>{saved ? '✓ Saved' : '↓ Save'}</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.readingLabel}>YOUR COMPATIBILITY READING</Text>
+              {partnerChartFailed && (
+                <Text style={styles.chartWarning}>
+                  Note: Your partner's birth chart could not be generated. This reading uses birth data only and may have reduced precision.
+                </Text>
+              )}
               <Text style={styles.readingText}>{reading}</Text>
 
               {/* New reading */}
@@ -377,13 +406,14 @@ export default function CompatibilityScreen() {
                 onPress={() => {
                   setReading('');
                   setScore(null);
+                  setPartnerChartFailed(false);
                   setPartnerName('');
                   setPartnerDate(new Date(1990, 0, 1));
                   setPartnerTime(new Date(1990, 0, 1, 12, 0));
+                  setPartnerPickerTime(new Date(1990, 0, 1, 12, 0));
                   setDateConfirmed(false);
                   setTimeConfirmed(false);
                   setPartnerPlace('');
-                  setSaved(false);
                 }}
               >
                 <Text style={styles.newReadingText}>Start a New Reading</Text>
@@ -478,6 +508,7 @@ const styles = StyleSheet.create({
   readingSection: { marginHorizontal: Spacing.md, marginBottom: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.md },
   readingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
   readingLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel },
+  chartWarning: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginBottom: 10, lineHeight: 18 },
   saveBtn: { backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 6 },
   saveBtnSaved: { backgroundColor: Colors.emerald + '22', borderColor: Colors.emerald },
   saveBtnText: { fontSize: 11, fontFamily: Fonts.cinzel, color: Colors.gold },

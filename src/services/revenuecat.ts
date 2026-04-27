@@ -1,16 +1,21 @@
 import Purchases, { LOG_LEVEL, PurchasesPackage, CustomerInfo } from 'react-native-purchases';
 import { Platform } from 'react-native';
-import { SUBSCRIPTION_PRODUCTS } from '@constants/astrology';
 import { REVENUECAT_IOS_KEY, REVENUECAT_ANDROID_KEY } from '@constants/config';
 
 const IOS_API_KEY = REVENUECAT_IOS_KEY;
 const ANDROID_API_KEY = REVENUECAT_ANDROID_KEY;
 
-export async function initRevenueCat(userId?: string): Promise<void> {
-  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.ERROR);
+let _configured = false;
 
+export async function initRevenueCat(userId?: string): Promise<void> {
+  if (_configured) return;
   const apiKey = Platform.OS === 'ios' ? IOS_API_KEY : ANDROID_API_KEY;
+  if (!apiKey) {
+    throw new Error('RevenueCat API key missing — subscription features are disabled in this build.');
+  }
+  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.ERROR);
   Purchases.configure({ apiKey, appUserID: userId });
+  _configured = true;
 }
 
 export async function getOfferings(): Promise<PurchasesPackage[]> {
@@ -21,31 +26,30 @@ export async function getOfferings(): Promise<PurchasesPackage[]> {
     }
     return [];
   } catch (e) {
-    console.error('RevenueCat getOfferings error:', e);
+    if (__DEV__) console.warn('RevenueCat getOfferings error:', e);
     return [];
   }
 }
 
-export async function purchasePackage(pkg: PurchasesPackage): Promise<CustomerInfo | null> {
+export type PurchaseResult =
+  | { status: 'success'; customerInfo: CustomerInfo }
+  | { status: 'cancelled' }
+  | { status: 'error'; message: string };
+
+export async function purchasePackage(pkg: PurchasesPackage): Promise<PurchaseResult> {
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
-    return customerInfo;
+    return { status: 'success', customerInfo };
   } catch (e: any) {
-    if (!e.userCancelled) {
-      console.error('Purchase error:', e);
-    }
-    return null;
+    if (e?.userCancelled) return { status: 'cancelled' };
+    if (__DEV__) console.warn('Purchase error:', e);
+    return { status: 'error', message: e?.message ?? 'Purchase failed. Please try again.' };
   }
 }
 
-export async function restorePurchases(): Promise<CustomerInfo | null> {
-  try {
-    const customerInfo = await Purchases.restorePurchases();
-    return customerInfo;
-  } catch (e) {
-    console.error('Restore error:', e);
-    return null;
-  }
+export async function restorePurchases(): Promise<CustomerInfo> {
+  // Throws on error so callers can distinguish "no purchases" from "couldn't reach server"
+  return Purchases.restorePurchases();
 }
 
 export async function getCustomerInfo(): Promise<CustomerInfo | null> {
@@ -57,28 +61,31 @@ export async function getCustomerInfo(): Promise<CustomerInfo | null> {
 }
 
 export function isPremiumActive(customerInfo: CustomerInfo): boolean {
-  return (
-    customerInfo.activeSubscriptions.includes(SUBSCRIPTION_PRODUCTS.monthly) ||
-    customerInfo.activeSubscriptions.includes(SUBSCRIPTION_PRODUCTS.annual) ||
-    typeof customerInfo.allPurchaseDates[SUBSCRIPTION_PRODUCTS.lifetime] === 'string'
-  );
+  return !!customerInfo.entitlements.active['premium'];
 }
 
 // Pricing display helpers
 export const PRICING = {
-  monthly: { price: '$9.99', period: 'month', label: 'Monthly' },
-  annual: { price: '$59.99', period: 'year', label: 'Annual', savings: 'Save 50%' },
-  lifetime: { price: '$149.99', period: 'once', label: 'Lifetime', savings: 'Best Value' },
+  monthly: { price: '$14.99', period: 'month', label: 'Monthly' },
+  annual: { price: '$149.99', period: 'year', label: 'Annual', savings: 'Save 17%' },
+  lifetime: { price: '$249.99', period: 'once', label: 'Lifetime', savings: 'Best Value' },
 };
+
+export function addCustomerInfoListener(
+  callback: (info: CustomerInfo) => void
+): () => void {
+  Purchases.addCustomerInfoUpdateListener(callback);
+  return () => Purchases.removeCustomerInfoUpdateListener(callback);
+}
 
 export const PREMIUM_FEATURES = [
   { icon: '∞', text: 'Unlimited Guru AI conversations' },
+  { icon: '✦', text: 'Personalized daily cosmic readings' },
   { icon: '🖐', text: 'Full palm reading analysis' },
   { icon: '◉', text: 'Complete birth chart with all divisional charts' },
-  { icon: '☯', text: 'Chinese BaZi Four Pillars reading' },
-  { icon: '✦', text: 'Lal Kitab remedies & personalized upay' },
+  { icon: '☯', text: 'Chinese astrology & zodiac reading' },
+  { icon: '📖', text: 'Lal Kitab remedies & personalized upay' },
   { icon: '♡', text: 'Unlimited compatibility & synastry reports' },
-  { icon: '🔔', text: 'Daily personalized cosmic alerts' },
   { icon: '📊', text: 'Advanced Dasha timeline & predictions' },
   { icon: '∑', text: 'Full numerology profile' },
   { icon: '✓', text: 'Saved charts for family & friends' },

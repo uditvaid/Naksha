@@ -9,6 +9,29 @@ import { useAppStore } from '@store/userStore';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import type { PurchasesPackage } from 'react-native-purchases';
 
+function findPackageForTier(
+  pkgs: PurchasesPackage[],
+  tier: 'monthly' | 'annual' | 'lifetime'
+): PurchasesPackage | undefined {
+  if (tier === 'monthly') {
+    return pkgs.find(p =>
+      p.packageType === 'MONTHLY' ||
+      p.identifier.toLowerCase().includes('monthly')
+    );
+  }
+  if (tier === 'annual') {
+    return pkgs.find(p =>
+      p.packageType === 'ANNUAL' ||
+      p.identifier.toLowerCase().includes('annual') ||
+      p.identifier.toLowerCase().includes('yearly')
+    );
+  }
+  return pkgs.find(p =>
+    p.packageType === 'LIFETIME' ||
+    p.identifier.toLowerCase().includes('lifetime')
+  );
+}
+
 export default function PaywallScreen() {
   const setPremium = useAppStore(s => s.setPremium);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
@@ -18,12 +41,22 @@ export default function PaywallScreen() {
   const [selectedTier, setSelectedTier] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
 
   useEffect(() => {
+    let mounted = true;
     getOfferings().then((pkgs) => {
+      if (!mounted) return;
       setPackages(pkgs);
-      const yearly = pkgs.find(p => p.identifier.includes('yearly') || p.identifier.includes('annual'));
-      if (yearly) setSelectedPkg(yearly);
+      const yearly = pkgs.find(p =>
+        p.packageType === 'ANNUAL' ||
+        p.identifier.toLowerCase().includes('annual') ||
+        p.identifier.toLowerCase().includes('yearly')
+      );
+      setSelectedPkg(yearly ?? pkgs[0] ?? null);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => {
+      if (!mounted) return;
+      setLoading(false);
+    });
+    return () => { mounted = false; };
   }, []);
 
   const handlePurchase = async () => {
@@ -39,14 +72,21 @@ export default function PaywallScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const info = await purchasePackage(selectedPkg);
-      if (info && isPremiumActive(info)) {
-        setPremium(true, info.latestExpirationDate ?? undefined);
+      const result = await purchasePackage(selectedPkg);
+      if (result.status === 'success' && isPremiumActive(result.customerInfo)) {
+        setPremium(true, result.customerInfo.latestExpirationDate ?? undefined);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.back();
+      } else if (result.status === 'success') {
+        // Purchase succeeded but the entitlement isn't reflected — likely a server-side delay.
+        Alert.alert(
+          'Almost There',
+          'Your purchase went through but we couldn\'t verify your premium access yet. Please tap "Restore Purchases" in a moment.',
+        );
+      } else if (result.status === 'error') {
+        Alert.alert('Purchase Failed', result.message);
       }
-    } catch (e) {
-      Alert.alert('Purchase Failed', 'Something went wrong. Please try again.');
+      // result.status === 'cancelled' → user backed out; no alert needed.
     } finally {
       setPurchasing(false);
     }
@@ -54,15 +94,23 @@ export default function PaywallScreen() {
 
   const handleRestore = async () => {
     setPurchasing(true);
-    const info = await restorePurchases();
-    if (info && isPremiumActive(info)) {
-      setPremium(true, info.latestExpirationDate ?? undefined);
-      Alert.alert('Restored!', 'Your premium access has been restored.');
-      router.back();
-    } else {
-      Alert.alert('No Purchases Found', 'No active subscriptions were found for this account.');
+    try {
+      const info = await restorePurchases();
+      if (isPremiumActive(info)) {
+        setPremium(true, info.latestExpirationDate ?? undefined);
+        Alert.alert('Restored!', 'Your premium access has been restored.');
+        router.back();
+      } else {
+        Alert.alert('No Purchases Found', 'No active subscriptions were found for this account.');
+      }
+    } catch {
+      Alert.alert(
+        'Restore Failed',
+        'We couldn\'t reach the App Store. Please check your connection and try again.',
+      );
+    } finally {
+      setPurchasing(false);
     }
-    setPurchasing(false);
   };
 
   const tiers = [
@@ -70,6 +118,50 @@ export default function PaywallScreen() {
     { key: 'annual', ...PRICING.annual },
     { key: 'lifetime', ...PRICING.lifetime },
   ] as const;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+          <Text style={styles.closeBtnText}>✕</Text>
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <ActivityIndicator color={Colors.gold} size="large" />
+          <Text style={{ fontSize: 13, color: Colors.muted, fontFamily: Fonts.cinzel, letterSpacing: 1 }}>
+            Loading…
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!loading && packages.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+          <Text style={styles.closeBtnText}>✕</Text>
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: 16 }}>
+          <Text style={{ fontSize: 36, color: Colors.gold }}>✦</Text>
+          <Text style={{ fontSize: 18, color: Colors.gold, fontFamily: Fonts.cinzel, textAlign: 'center' }}>
+            Subscriptions Unavailable
+          </Text>
+          <Text style={{ fontSize: 14, color: Colors.muted, fontFamily: Fonts.crimson, textAlign: 'center', lineHeight: 22 }}>
+            We couldn't reach the App Store to load subscription options. Please check your connection and try again.
+          </Text>
+          <TouchableOpacity style={styles.purchaseBtn} onPress={() => router.back()}>
+            <LinearGradient
+              colors={['#C9A84C', '#E8C96A', '#C9A84C']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={[styles.purchaseBtnGradient, { paddingHorizontal: 40 }]}
+            >
+              <Text style={styles.purchaseBtnText}>Close</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -106,8 +198,7 @@ export default function PaywallScreen() {
               style={[styles.tierCard, selectedTier === tier.key && styles.tierCardSelected]}
               onPress={() => {
                 setSelectedTier(tier.key);
-                const id = tier.key === 'annual' ? 'yearly' : tier.key;
-                const pkg = packages.find(p => p.identifier.includes(id));
+                const pkg = findPackageForTier(packages, tier.key);
                 if (pkg) setSelectedPkg(pkg);
               }}
             >
@@ -115,19 +206,34 @@ export default function PaywallScreen() {
                 <Text style={[styles.tierLabel, selectedTier === tier.key && styles.tierLabelSelected]} numberOfLines={1}>
                   {tier.label}
                 </Text>
-                {'savings' in tier && tier.savings && (
-                  <View style={styles.savingsBadge}>
-                    <Text style={styles.savingsBadgeText}>{tier.savings}</Text>
-                  </View>
-                )}
+                {(() => {
+                  if (tier.key === 'annual') {
+                    const monthlyPkg = findPackageForTier(packages, 'monthly');
+                    const annualPkg = findPackageForTier(packages, 'annual');
+                    const monthlyPrice = monthlyPkg?.product?.price;
+                    const annualPrice = annualPkg?.product?.price;
+                    if (monthlyPrice && annualPrice && monthlyPrice > 0) {
+                      const pct = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
+                      if (pct > 0) return (
+                        <View style={styles.savingsBadge}>
+                          <Text style={styles.savingsBadgeText}>Save {pct}%</Text>
+                        </View>
+                      );
+                    }
+                  }
+                  if (tier.key === 'lifetime' && 'savings' in tier && tier.savings) {
+                    return (
+                      <View style={styles.savingsBadge}>
+                        <Text style={styles.savingsBadgeText}>{tier.savings}</Text>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
               </View>
               <View style={styles.tierRight}>
                 <Text style={[styles.tierPrice, selectedTier === tier.key && styles.tierPriceSelected]}>
-                  {(() => {
-                    const id = tier.key === 'annual' ? 'yearly' : tier.key;
-                    const pkg = packages.find(p => p.identifier.includes(id));
-                    return pkg?.product?.priceString ?? tier.price;
-                  })()}
+                  {findPackageForTier(packages, tier.key)?.product?.priceString ?? tier.price}
                 </Text>
                 <Text style={styles.tierPeriod}>/{tier.period}</Text>
               </View>

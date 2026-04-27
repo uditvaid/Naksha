@@ -3,6 +3,14 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FREE_GURU_QUESTIONS_PER_DAY } from '../constants/astrology';
 
+type ResetListener = () => void;
+const resetListeners: Set<ResetListener> = new Set();
+
+export function onAppReset(listener: ResetListener): () => void {
+  resetListeners.add(listener);
+  return () => resetListeners.delete(listener);
+}
+
 export interface BirthData {
   name: string;
   dateOfBirth: string;
@@ -20,6 +28,7 @@ export interface ChartData {
   dashas: DashaPeriod[];
   yogas: string[];
   navamshaLagna: string;
+  isApproximate?: boolean;
 }
 
 export interface PlanetPosition {
@@ -81,7 +90,6 @@ export interface UserProfile {
   guruQuestionsToday: number;
   lastGuruDate: string | null;
   onboardingComplete: boolean;
-  notificationsEnabled: boolean;
   preferredSystem: 'vedic' | 'western';
 }
 
@@ -125,7 +133,6 @@ const defaultUser: UserProfile = {
   guruQuestionsToday: 0,
   lastGuruDate: null,
   onboardingComplete: false,
-  notificationsEnabled: false,
   preferredSystem: 'vedic',
 };
 
@@ -196,7 +203,7 @@ export const useAppStore = create<AppState>()(
       saveReading: (reading) => {
         const newReading: SavedReading = {
           ...reading,
-          id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+          id: crypto.randomUUID(),
           createdAt: new Date().toISOString(),
         };
         set((state) => ({
@@ -221,11 +228,24 @@ export const useAppStore = create<AppState>()(
 
       setLoading: (loading) => set({ isLoading: loading }),
 
-      reset: () => set({ user: defaultUser, guruMessages: [] }),
+      reset: () => {
+        set({ user: defaultUser, guruMessages: [] });
+        resetListeners.forEach(fn => {
+          try { fn(); } catch { /* swallow listener errors */ }
+        });
+      },
     }),
     {
       name: 'nakshatra-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 2,
+      migrate: (persistedState: any, _version: number) => {
+        if (persistedState?.user && 'notificationsEnabled' in persistedState.user) {
+          const { notificationsEnabled: _dropped, ...rest } = persistedState.user;
+          return { ...persistedState, user: rest };
+        }
+        return persistedState;
+      },
       partialize: (state) => ({
         user: state.user,
         guruMessages: state.guruMessages.slice(-50),
