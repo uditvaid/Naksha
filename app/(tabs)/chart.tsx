@@ -1,4 +1,4 @@
-import { useState, useRef, memo, useMemo } from 'react';
+import { useState, useRef, memo, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Dimensions, Modal, ActivityIndicator,
@@ -205,7 +205,7 @@ export default function ChartScreen() {
   // overwriting content for a different (or already-closed) modal session.
   const requestTokenRef = useRef(0);
 
-  const openDasha = async (dasha: any) => {
+  const openDasha = useCallback(async (dasha: any) => {
     const start = new Date(dasha.startDate);
     const end = new Date(dasha.endDate);
     const isPast = !dasha.isActive && now >= end;
@@ -265,9 +265,9 @@ export default function ChartScreen() {
     } finally {
       if (token === requestTokenRef.current) setModalLoading(false);
     }
-  };
+  }, [now, isPremium, user.birthData, user.chart]);
 
-  const openYoga = async (yoga: string) => {
+  const openYoga = useCallback(async (yoga: string) => {
     const cacheKey = `yoga-${yoga}`;
     setModalTitle(yoga);
     setModalSubtitle('Planetary combination in your chart');
@@ -311,9 +311,9 @@ export default function ChartScreen() {
     } finally {
       if (token === requestTokenRef.current) setModalLoading(false);
     }
-  };
+  }, [isPremium, user.birthData, user.chart]);
 
-  const openPlanet = async (p: any) => {
+  const openPlanet = useCallback(async (p: any) => {
     const cacheKey = `planet-${p.planet}-${p.sign}-${p.house}`;
     setModalTitle(`${p.planet} in ${p.sign}`);
     setModalSubtitle(`House ${p.house} · ${p.nakshatra} · ${p.isRetrograde ? 'Retrograde' : 'Direct'}`);
@@ -357,12 +357,12 @@ export default function ChartScreen() {
     } finally {
       if (token === requestTokenRef.current) setModalLoading(false);
     }
-  };
+  }, [isPremium, user.birthData, user.chart]);
 
-  const handleAskGuru = () => {
+  const handleAskGuru = useCallback(() => {
     setModalVisible(false);
     setTimeout(() => router.push('/(tabs)/guru'), 300);
-  };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

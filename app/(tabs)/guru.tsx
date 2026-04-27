@@ -186,7 +186,7 @@ export default function GuruScreen() {
           contentContainerStyle={{ paddingBottom: 16 }}
         >
           {messages.length === 0 ? (
-            <WelcomeState onSelect={(q) => sendMessage(q)} {...getDashaQuestions(chart)} />
+            <WelcomeState onSelect={sendMessage} {...getDashaQuestions(chart)} />
           ) : (
             messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
@@ -234,7 +234,7 @@ export default function GuruScreen() {
   );
 }
 
-function WelcomeState({ onSelect, questions, dashaLord }: { onSelect: (q: string) => void; questions: string[]; dashaLord?: string }) {
+const WelcomeState = memo(function WelcomeState({ onSelect, questions, dashaLord }: { onSelect: (q: string) => void; questions: string[]; dashaLord?: string }) {
   return (
     <View style={styles.welcome}>
       <Text style={styles.welcomeIcon}>🔱</Text>
@@ -255,7 +255,7 @@ function WelcomeState({ onSelect, questions, dashaLord }: { onSelect: (q: string
       </Text>
     </View>
   );
-}
+});
 
 const MessageBubble = memo(function MessageBubble({ message }: { message: any }) {
   const isUser = message.role === 'user';

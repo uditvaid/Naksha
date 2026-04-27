@@ -1,0 +1,129 @@
+{
+  "$schema": "naksha_chart_fixture_v1",
+  "generated_utc": "2026-04-26",
+  "verified_with": "pyswisseph 2.10.3.2 (Swiss Ephemeris)",
+  "conventions": {
+    "ayanamsha": "lahiri_chitrapaksha",
+    "house_system": "whole_sign",
+    "node": "mean"
+  },
+
+  "fixtures": [
+    {
+      "id": "primary_humble",
+      "input": {
+        "date": "1989-06-04",
+        "time": "16:09:00",
+        "tz_offset_minutes": 330,
+        "lat": 28.4089,
+        "lon": 77.3178,
+        "place_label": "Faridabad, Haryana, India"
+      },
+      "expected": {
+        "lagna": {
+          "sign": "Libra",
+          "sign_index_0": 6,
+          "deg_in_sign": 11.22,
+          "sidereal_longitude": 191.2187,
+          "nakshatra": "Swati",
+          "pada": 2
+        },
+        "planets": {
+          "Sun":     {"sign": "Taurus",      "sign_index_0": 1, "deg_in_sign": 20.07, "sidereal_longitude": 50.07,  "house": 8, "nakshatra": "Rohini",         "pada": 4, "retrograde": false},
+          "Moon":    {"sign": "Taurus",      "sign_index_0": 1, "deg_in_sign": 28.28, "sidereal_longitude": 58.28,  "house": 8, "nakshatra": "Mrigashira",     "pada": 2, "retrograde": false},
+          "Mars":    {"sign": "Gemini",      "sign_index_0": 2, "deg_in_sign": 28.74, "sidereal_longitude": 88.74,  "house": 9, "nakshatra": "Punarvasu",      "pada": 3, "retrograde": false},
+          "Mercury": {"sign": "Taurus",      "sign_index_0": 1, "deg_in_sign": 4.47,  "sidereal_longitude": 34.47,  "house": 8, "nakshatra": "Krittika",       "pada": 3, "retrograde": true},
+          "Jupiter": {"sign": "Taurus",      "sign_index_0": 1, "deg_in_sign": 23.65, "sidereal_longitude": 53.65,  "house": 8, "nakshatra": "Mrigashira",     "pada": 1, "retrograde": false},
+          "Venus":   {"sign": "Gemini",      "sign_index_0": 2, "deg_in_sign": 5.95,  "sidereal_longitude": 65.95,  "house": 9, "nakshatra": "Mrigashira",     "pada": 4, "retrograde": false},
+          "Saturn":  {"sign": "Sagittarius", "sign_index_0": 8, "deg_in_sign": 18.85, "sidereal_longitude": 258.85, "house": 3, "nakshatra": "Purva Ashadha",  "pada": 2, "retrograde": true},
+          "Rahu":    {"sign": "Aquarius",    "sign_index_0": 10,"deg_in_sign": 5.90,  "sidereal_longitude": 305.90, "house": 5, "nakshatra": "Dhanishta",      "pada": 4, "retrograde": true},
+          "Ketu":    {"sign": "Leo",         "sign_index_0": 4, "deg_in_sign": 5.90,  "sidereal_longitude": 125.90, "house": 11,"nakshatra": "Magha",           "pada": 2, "retrograde": true}
+        },
+        "vimshottari": {
+          "starting_lord": "Mars",
+          "balance_years_at_birth": 4.402,
+          "mahadasha_sequence": [
+            {"lord": "Mars",    "start": "1986-10-29", "end": "1993-10-29", "years": 7},
+            {"lord": "Rahu",    "start": "1993-10-29", "end": "2011-10-29", "years": 18},
+            {"lord": "Jupiter", "start": "2011-10-29", "end": "2027-10-29", "years": 16},
+            {"lord": "Saturn",  "start": "2027-10-29", "end": "2046-10-29", "years": 19},
+            {"lord": "Mercury", "start": "2046-10-29", "end": "2063-10-29", "years": 17},
+            {"lord": "Ketu",    "start": "2063-10-29", "end": "2070-10-29", "years": 7},
+            {"lord": "Venus",   "start": "2070-10-29", "end": "2090-10-29", "years": 20},
+            {"lord": "Sun",     "start": "2090-10-29", "end": "2096-10-29", "years": 6},
+            {"lord": "Moon",    "start": "2096-10-29", "end": "2106-10-29", "years": 10}
+          ],
+          "current_mahadasha_at_2026_04_26": "Jupiter"
+        }
+      },
+      "tolerances": {
+        "longitude_deg": 0.05,
+        "house": 0,
+        "dasha_date_days": 1
+      }
+    },
+
+    {
+      "id": "dob_sensitivity_jun3_vs_jun4",
+      "purpose": "Confirms Vimshottari changes when Moon crosses nakshatra boundary between Jun 3 and Jun 4 1989",
+      "cases": [
+        {
+          "input": {"date": "1989-06-03", "time": "16:09:00", "tz_offset_minutes": 330, "lat": 28.4089, "lon": 77.3178},
+          "expected": {
+            "moon_nakshatra": "Rohini",
+            "moon_pada": 2,
+            "starting_md_lord": "Moon",
+            "balance_years_at_birth": 7.051
+          }
+        },
+        {
+          "input": {"date": "1989-06-04", "time": "16:09:00", "tz_offset_minutes": 330, "lat": 28.4089, "lon": 77.3178},
+          "expected": {
+            "moon_nakshatra": "Mrigashira",
+            "moon_pada": 2,
+            "starting_md_lord": "Mars",
+            "balance_years_at_birth": 4.402
+          }
+        }
+      ]
+    }
+  ],
+
+  "invariants": [
+    {"id": "node_axis_longitude",   "rule": "abs((rahu.lon + 180) mod 360 - ketu.lon) < 0.001"},
+    {"id": "node_axis_house",        "rule": "((rahu.house - 1 + 6) mod 12) + 1 == ketu.house"},
+    {"id": "mercury_sun_proximity",  "rule": "angular_diff(mercury.lon, sun.lon) <= 28.0"},
+    {"id": "venus_sun_proximity",    "rule": "angular_diff(venus.lon, sun.lon) <= 48.0"},
+    {"id": "whole_sign_house_rule",  "rule": "for each planet: planet.house == ((planet.sign_index - lagna.sign_index) mod 12) + 1"},
+    {"id": "dasha_total_years",      "rule": "sum of all 9 mahadasha years == 120"},
+    {"id": "dasha_cyclic_order",     "rule": "lord sequence cycles Ketu→Venus→Sun→Moon→Mars→Rahu→Jupiter→Saturn→Mercury"},
+    {"id": "starting_dasha_lord",    "rule": "starting_md_lord == nakshatra_lord(moon.nakshatra)"}
+  ],
+
+  "naksha_observed_bugs_2026_04_26": [
+    {
+      "screen": "Birth Chart",
+      "bugs": [
+        "Mars displayed in 10th house (Cancer); ground truth: 9th house (Gemini)",
+        "Mercury displayed in 3rd house (Sagittarius); ground truth: 8th house (Taurus)",
+        "Rahu displayed in 11th house (Leo); ground truth: 5th house (Aquarius)",
+        "Ketu displayed in 5th house (Aquarius); ground truth: 11th house (Leo) — Rahu/Ketu axis swap"
+      ]
+    },
+    {
+      "screen": "Birth Chart header",
+      "bugs": [
+        "Date displayed: Jun 3, 1989; verified DOB: Jun 4, 1989"
+      ]
+    },
+    {
+      "screen": "Dashas",
+      "bugs": [
+        "Starting Mahadasha shown as Moon; ground truth: Mars",
+        "Jupiter MD shown as 2018–2034; ground truth: 2011–2027",
+        "Saturn MD shown as 2034–2053; ground truth: 2027–2046 (off by ~7 years)",
+        "Implied birth time from displayed dasha balance is ~22:00 IST on Jun 3, inconsistent with documented 16:09 IST"
+      ]
+    }
+  ]
+}
