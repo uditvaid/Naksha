@@ -112,12 +112,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     typedRoutes: true,
   },
   extra: {
-    eas: {
-      projectId: 'acac732e-95a4-4c55-b540-f526bc0849b2',
-    },
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
-    prokeralaClientId: process.env.PROKERALA_CLIENT_ID ?? '',
-    prokeralaClientSecret: process.env.PROKERALA_CLIENT_SECRET ?? '',
+    eas: { projectId: 'acac732e-95a4-4c55-b540-f526bc0849b2' },
+    proxyBaseUrl: process.env.PROXY_BASE_URL ?? '',
+    appHmacSecret: process.env.APP_HMAC_SECRET ?? '',
     revenueCatIosKey: process.env.REVENUECAT_IOS_KEY ?? '',
     revenueCatAndroidKey: process.env.REVENUECAT_ANDROID_KEY ?? '',
     buildProfile: process.env.EAS_BUILD_PROFILE ?? 'local',
