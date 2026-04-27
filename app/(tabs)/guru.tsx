@@ -251,7 +251,7 @@ function WelcomeState({ onSelect, questions, dashaLord }: { onSelect: (q: string
         </TouchableOpacity>
       ))}
       <Text style={styles.disclaimer}>
-        All responses are AI-generated using classical Vedic texts as context. Readings are for spiritual self-inquiry and entertainment only — they do not constitute medical, legal, or financial advice.
+        All responses are AI-generated using classical Vedic texts as context. Readings are for spiritual self-inquiry and entertainment only — they do not constitute medical, legal, financial, or mental health advice. If you are experiencing a mental health concern, please consult a qualified professional.
       </Text>
     </View>
   );

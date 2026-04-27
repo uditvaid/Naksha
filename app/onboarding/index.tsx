@@ -197,6 +197,7 @@ export default function OnboardingScreen() {
   const setChart = useAppStore(s => s.setChart);
 
   const [step, setStep] = useState(0);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [name, setName] = useState('');
   const [place, setPlace] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -260,6 +261,9 @@ export default function OnboardingScreen() {
   const handleNext = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    if (step === 0 && !ageConfirmed) {
+      Alert.alert('Age Confirmation Required', 'Please confirm you are 13 years or older to continue.'); return;
+    }
     if (step === 1 && !name.trim()) {
       Alert.alert('Please enter your name'); return;
     }
@@ -363,6 +367,20 @@ export default function OnboardingScreen() {
                 </View>
               ))}
             </View>
+
+            {/* Age confirmation */}
+            <TouchableOpacity
+              style={styles.ageCheckRow}
+              onPress={() => setAgeConfirmed(v => !v)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.ageCheckbox, ageConfirmed && styles.ageCheckboxChecked]}>
+                {ageConfirmed && <Text style={styles.ageCheckmark}>✓</Text>}
+              </View>
+              <Text style={styles.ageCheckLabel}>
+                I am 13 years of age or older (or have parental consent)
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -610,6 +628,11 @@ const styles = StyleSheet.create({
   featureItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   featureDot: { color: Colors.gold, fontSize: 10 },
   featureItemText: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.crimson },
+  ageCheckRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, paddingHorizontal: 4 },
+  ageCheckbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 1.5, borderColor: Colors.muted, alignItems: 'center', justifyContent: 'center' },
+  ageCheckboxChecked: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  ageCheckmark: { fontSize: 12, color: Colors.midnight, fontWeight: '700' },
+  ageCheckLabel: { flex: 1, fontSize: 13, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 18 },
 
   // Steps
   stepNumber: { fontSize: 11, letterSpacing: 2, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 12 },
