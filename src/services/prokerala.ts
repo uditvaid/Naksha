@@ -6,81 +6,31 @@
 
 import { BirthData, ChartData, PlanetPosition, DashaPeriod } from '@store/userStore';
 import { NAKSHATRAS, MAHADASHA_YEARS } from '@constants/astrology';
-import { PROKERALA_CLIENT_ID, PROKERALA_CLIENT_SECRET } from '@constants/config';
+import { PROXY_BASE_URL } from '@constants/config';
+import { buildAuthHeader } from './auth';
 import { calculateVimshottariDasha } from '@utils/vedic';
 
-const BASE_URL = 'https://api.prokerala.com';
-const CLIENT_ID = PROKERALA_CLIENT_ID;
-const CLIENT_SECRET = PROKERALA_CLIENT_SECRET;
+const BASE_URL = `${PROXY_BASE_URL}/v1/prokerala`;
 
 const SIGNS = [
   'Aries','Taurus','Gemini','Cancer','Leo','Virgo',
   'Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces',
 ];
 
-// ─── Token cache ──────────────────────────────────────────────────────────────
-
-let cachedToken: string | null = null;
-let tokenExpiry: number = 0;
-let inflightToken: Promise<string> | null = null;
-
-async function getAccessToken(): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
-  if (inflightToken) return inflightToken;
-
-  inflightToken = (async () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
-    try {
-      const res = await fetch(`${BASE_URL}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-        }).toString(),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`Prokerala token error: ${err}`);
-      }
-
-      const data = await res.json();
-      cachedToken = data.access_token;
-      tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
-      return cachedToken!;
-    } catch (e: any) {
-      if (e?.name === 'AbortError') throw new Error('Could not connect to the astrology server. Please check your connection and try again.');
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
-  })();
-
-  try {
-    return await inflightToken;
-  } finally {
-    inflightToken = null;
-  }
-}
-
 const PROKERALA_REQUEST_TIMEOUT_MS = 15000;
 
 async function prokeralaGet(endpoint: string, params: Record<string, string>): Promise<any> {
-  const token = await getAccessToken();
-  const url = new URL(`${BASE_URL}/v2/astrology/${endpoint}`);
+  const url = new URL(`${BASE_URL}/${endpoint}`);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
+  const authHeader = await buildAuthHeader();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROKERALA_REQUEST_TIMEOUT_MS);
 
   try {
     const res = await fetch(url.toString(), {
       headers: {
-        Authorization: `Bearer ${token}`,
+        'x-naksha-auth': authHeader,
         Accept: 'application/json',
       },
       signal: controller.signal,
@@ -88,10 +38,6 @@ async function prokeralaGet(endpoint: string, params: Record<string, string>): P
 
     if (!res.ok) {
       const err = await res.text();
-      if (res.status === 401) {
-        cachedToken = null;
-        tokenExpiry = 0;
-      }
       throw new Error(`Prokerala API error (${endpoint}): ${err}`);
     }
 

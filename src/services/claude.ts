@@ -10,23 +10,17 @@
  */
 
 import { BirthData, ChartData, GuruMessage } from '@store/userStore';
-import { ANTHROPIC_API_KEY } from '@constants/config';
+import { PROXY_BASE_URL } from '@constants/config';
+import { buildAuthHeader } from './auth';
 import { deriveUserPersona, buildDynamicGuruPrompt } from './personaEngine';
 
-const API_URL = 'https://api.anthropic.com/v1/messages';
+const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const MODEL = 'claude-sonnet-4-5';
-const API_KEY = ANTHROPIC_API_KEY;
 const REQUEST_TIMEOUT_MS = 30000;
 
 interface ClaudeMessage {
   role: 'user' | 'assistant';
   content: string;
-}
-
-function requireApiKey() {
-  if (!API_KEY) {
-    throw new Error('AI readings are temporarily unavailable. Please update the app and try again.');
-  }
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
@@ -49,14 +43,13 @@ async function callClaude(
   messages: ClaudeMessage[],
   maxTokens = 1024
 ): Promise<string> {
-  requireApiKey();
+  const authHeader = await buildAuthHeader();
 
   const response = await fetchWithTimeout(API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': API_KEY,
-      'anthropic-version': '2023-06-01',
+      'x-naksha-auth': authHeader,
     },
     body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages }),
   }, REQUEST_TIMEOUT_MS);
@@ -185,18 +178,16 @@ export async function analyzePalm(
   birthData: BirthData,
   hand: 'left' | 'right'
 ): Promise<string> {
-  requireApiKey();
-
   const handContext = hand === 'left'
     ? 'the left hand — which in Hasta Samudrika Shastra reveals karma inherited from past lives, soul tendencies, and the blueprint of constitution at birth'
     : 'the right hand — which reveals what the soul is actively building: the karma being shaped through present-life choices and dharmic effort';
 
+  const authHeader = await buildAuthHeader();
   const response = await fetchWithTimeout(API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': API_KEY,
-      'anthropic-version': '2023-06-01',
+      'x-naksha-auth': authHeader,
     },
     body: JSON.stringify({
       model: MODEL,

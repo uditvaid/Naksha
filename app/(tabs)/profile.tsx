@@ -7,7 +7,7 @@ import { useAppStore } from '@store/userStore';
 import { restorePurchases, isPremiumActive } from '@services/revenuecat';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { PLANETS } from '@constants/astrology';
-import { TEST_MODE, BUILD_PROFILE, ANTHROPIC_API_KEY, PROKERALA_CLIENT_ID, REVENUECAT_IOS_KEY } from '@constants/config';
+import { TEST_MODE, BUILD_PROFILE, PROXY_BASE_URL, REVENUECAT_IOS_KEY } from '@constants/config';
 import { getDailyReading } from '@services/claude';
 import { generateChart } from '@services/prokerala';
 
@@ -240,11 +240,8 @@ export default function ProfileScreen() {
             {/* API key presence diagnostics */}
             <View style={styles.diagBox}>
               <Text style={styles.diagTitle}>API KEYS IN THIS BUILD</Text>
-              <Text style={[styles.diagRow, { color: ANTHROPIC_API_KEY ? Colors.emerald ?? '#34D399' : Colors.ruby }]}>
-                Anthropic: {ANTHROPIC_API_KEY ? '✓ Present' : '✗ MISSING'}
-              </Text>
-              <Text style={[styles.diagRow, { color: PROKERALA_CLIENT_ID ? Colors.emerald ?? '#34D399' : Colors.ruby }]}>
-                Prokerala: {PROKERALA_CLIENT_ID ? '✓ Present' : '✗ MISSING'}
+              <Text style={[styles.diagRow, { color: PROXY_BASE_URL ? Colors.emerald ?? '#34D399' : Colors.ruby }]}>
+                Proxy: {PROXY_BASE_URL ? '✓ Present' : '✗ MISSING'}
               </Text>
               <Text style={[styles.diagRow, { color: REVENUECAT_IOS_KEY ? Colors.emerald ?? '#34D399' : Colors.ruby }]}>
                 RevenueCat: {REVENUECAT_IOS_KEY ? '✓ Present' : '✗ MISSING'}
