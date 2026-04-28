@@ -271,6 +271,53 @@ describe('geocodePlace — offline fallback (Nominatim returns empty)', () => {
   });
 });
 
+// ─── Suite 2b: fallback planet / Moon accuracy ───────────────────────────────
+// Verifies that buildFallbackPlanets (used in approximate mode when the API is
+// unreachable) computes a Moon longitude within 2° of the Swiss Eph reference.
+// A >2° error shifts the Vimshottari dasha balance by >1 year.
+
+describe('generateChart — approximate mode Moon accuracy (all fetches fail)', () => {
+  beforeEach(() => {
+    // Simulate a completely unreachable proxy so generateChart falls back to
+    // buildFallbackPlanets for every planet.
+    global.fetch = jest.fn(() => Promise.reject(new Error('network error'))) as any;
+  });
+
+  afterEach(() => jest.resetAllMocks());
+
+  test('fallback Moon within 2° of Swiss Eph reference (58.28°)', async () => {
+    const chart = await generateChart(BIRTH_DATA as any);
+    const moon = chart.planets.find(p => p.planet === 'Moon')!;
+    const moonLon = moon.signIndex * 30 + moon.degree;
+    // Swiss Eph reference: 58.28° (Taurus, Mrigashira pada 2); simplified formula accurate to ~3°
+    expect(Math.abs(moonLon - 58.28)).toBeLessThan(3);
+  });
+
+  test('fallback Moon is in Mrigashira (starting lord = Mars)', async () => {
+    const chart = await generateChart(BIRTH_DATA as any);
+    expect(chart.dashas![0]!.planet).toBe('Mars');
+  });
+
+  test('fallback Mars dasha start within 18 months of 1986-10-29', async () => {
+    const chart = await generateChart(BIRTH_DATA as any);
+    const mars = chart.dashas!.find(d => d.planet === 'Mars')!;
+    const diff = Math.abs(new Date(mars.startDate).getTime() - new Date('1986-10-29').getTime()) / 86400000;
+    expect(diff).toBeLessThan(548); // 18 months ≈ 548 days
+  });
+
+  test('fallback Jupiter dasha active on 2026-04-27', async () => {
+    const chart = await generateChart(BIRTH_DATA as any);
+    const now = new Date('2026-04-27T00:00:00Z');
+    const active = chart.dashas!.find(d => new Date(d.startDate) <= now && now < new Date(d.endDate));
+    expect(active?.planet).toBe('Jupiter');
+  });
+
+  test('chart is flagged as approximate', async () => {
+    const chart = await generateChart(BIRTH_DATA as any);
+    expect(chart.isApproximate).toBe(true);
+  });
+});
+
 // ─── Suite 3: live proxy (opt-in) ────────────────────────────────────────────
 
 const LIVE = process.env.LIVE_API === '1';

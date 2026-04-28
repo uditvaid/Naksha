@@ -571,10 +571,24 @@ function buildFallbackPlanets(lagnaSignIndex: number, birthData: BirthData): Pla
 
   const T = (julianDay - 2451545.0) / 36525;
 
+  // Moon's main perturbation corrections (Meeus, Ch. 47).
+  // Mean longitude alone can be off by ~5°; these five terms reduce error to <1°,
+  // which prevents the dasha balance from shifting by multiple years in approximate mode.
+  const moonMean = 218.3165 + 481267.8813 * T;
+  const D  = ((297.8502 + 445267.1115 * T) % 360) * Math.PI / 180; // mean elongation
+  const Ms = ((357.5291 +  35999.0503 * T) % 360) * Math.PI / 180; // Sun mean anomaly
+  const Mp = ((134.9634 + 477198.8676 * T) % 360) * Math.PI / 180; // Moon mean anomaly
+  const moonTrue = moonMean
+    + 6.289 * Math.sin(Mp)
+    - 1.274 * Math.sin(2 * D - Mp)
+    + 0.658 * Math.sin(2 * D)
+    + 0.214 * Math.sin(2 * Mp)
+    - 0.186 * Math.sin(Ms);
+
   // Simplified mean longitudes (degrees)
   const rawPositions: Record<string, number> = {
     Sun: (280.46646 + 36000.76983 * T) % 360,
-    Moon: (218.3165 + 481267.8813 * T) % 360,
+    Moon: moonTrue % 360,
     Mars: (355.433 + 19140.2993 * T) % 360,
     Mercury: (252.2509 + 149472.6746 * T) % 360,
     Jupiter: (34.3515 + 3034.9057 * T) % 360,
