@@ -42,13 +42,14 @@ const fx = fixtures.fixtures[0]!;
 const fxPlanets = fx.expected!.planets;
 const fxDashas = fx.expected!.vimshottari.mahadasha_sequence;
 
+const fxInput = fx.input!;
 const BIRTH_DATA = {
   name: 'Test',
-  dateOfBirth: fx.input.date,
+  dateOfBirth: fxInput.date,
   timeOfBirth: '16:09',
   placeOfBirth: 'Faridabad, India',
-  latitude: fx.input.lat,
-  longitude: fx.input.lon,
+  latitude: fxInput.lat,
+  longitude: fxInput.lon,
   timezone: 'Asia/Kolkata',
 };
 
