@@ -15,7 +15,7 @@ import { buildAuthHeader } from './auth';
 import { deriveUserPersona, buildDynamicGuruPrompt } from './personaEngine';
 
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
-const MODEL = 'claude-sonnet-4-5';
+const MODEL = 'claude-sonnet-4-6';
 const REQUEST_TIMEOUT_MS = 30000;
 
 interface ClaudeMessage {

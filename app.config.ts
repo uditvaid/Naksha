@@ -16,7 +16,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'app.nakshatra.vedic',
-    buildNumber: '20',
+    buildNumber: '21',
     infoPlist: {
       NSCameraUsageDescription:
         'Naksha uses your camera to read your palm lines for Vedic palmistry analysis.',

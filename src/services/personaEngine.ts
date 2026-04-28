@@ -213,7 +213,12 @@ export function deriveUserPersona(chart: ChartData): UserPersona {
   if (lagnaDosha === moonDosha) {
     dosha = lagnaDosha;
   } else {
-    const combo = [lagnaDosha, moonDosha].sort().join('-');
+    // Use canonical Vata→Pitta→Kapha order to match getDoshaGuidance keys.
+    // Alphabetical sort produces wrong order (e.g. 'Pitta-Vata' instead of 'Vata-Pitta').
+    const DOSHA_ORDER = ['Vata', 'Pitta', 'Kapha'];
+    const combo = [lagnaDosha, moonDosha]
+      .sort((a, b) => DOSHA_ORDER.indexOf(a) - DOSHA_ORDER.indexOf(b))
+      .join('-');
     dosha = (combo as UserPersona['dosha']) ?? 'Vata-Pitta';
   }
 
