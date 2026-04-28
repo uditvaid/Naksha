@@ -99,6 +99,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-font',
     'expo-camera',
     'expo-image-picker',
+    'expo-secure-store',
     [
       'expo-build-properties',
       {
