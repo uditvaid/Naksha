@@ -56,11 +56,17 @@ async function callClaude(
 
   if (!response.ok) {
     let errMessage = 'Service temporarily unavailable. Please try again.';
-    if (response.status === 401) errMessage = 'API authentication failed. Please check configuration.';
-    else if (response.status === 429) errMessage = 'Too many requests. Please wait a moment and try again.';
+    if (response.status === 401) errMessage = 'App authentication failed.';
+    else if (response.status === 429) errMessage = 'Daily request limit reached. Please try again tomorrow.';
+    else if (response.status === 529 || response.status === 503) {
+      errMessage = 'Our AI is experiencing heavy load right now. Please try again in a minute.';
+    }
     try {
       const err = await response.json();
-      if (err.error?.message) errMessage = err.error.message;
+      // Only override with API message if it's not an overload — those messages aren't user-friendly
+      if (err.error?.message && response.status !== 529 && response.status !== 503) {
+        errMessage = err.error.message;
+      }
     } catch { /* response wasn't JSON */ }
     throw new Error(errMessage);
   }

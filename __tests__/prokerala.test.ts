@@ -56,22 +56,23 @@ const BIRTH_DATA = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildFakePlanetPayload() {
-  // Prokerala's inverted convention: South Node = "Rahu", North Node = "Ketu"
-  // `degree` = absolute sidereal longitude (>30 triggers the sign-recompute branch in parsePlanetPosition)
-  // `rasi.id` = 1-indexed sign (matches parsePlanetPosition field path)
+  // Matches the real Prokerala planet-position API shape:
+  //   sign.id  = 1-indexed zodiac sign
+  //   longitude = within-sign { degrees, minutes, seconds }
+  // Prokerala's inverted node convention: South Node = "Rahu", North Node = "Ketu"
   return {
     planet_position: [
-      { name: 'Sun',     degree: 50.067,  rasi: { id: 2  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 4  } },
-      { name: 'Moon',    degree: 58.267,  rasi: { id: 2  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 5  } },
-      { name: 'Mars',    degree: 88.733,  rasi: { id: 3  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 7  } },
-      { name: 'Mercury', degree: 34.467,  rasi: { id: 2  }, is_retrograde: true,  is_exalted: false, is_debilitated: false, nakshatra: { id: 3  } },
-      { name: 'Jupiter', degree: 53.65,   rasi: { id: 2  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 5  } },
-      { name: 'Venus',   degree: 65.95,   rasi: { id: 3  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 5  } },
-      { name: 'Saturn',  degree: 258.85,  rasi: { id: 9  }, is_retrograde: true,  is_exalted: false, is_debilitated: false, nakshatra: { id: 20 } },
+      { name: 'Sun',     longitude: { degrees: 20, minutes: 4,  seconds: 0 }, sign: { id: 2  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 4  } },
+      { name: 'Moon',    longitude: { degrees: 28, minutes: 16, seconds: 0 }, sign: { id: 2  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 5  } },
+      { name: 'Mars',    longitude: { degrees: 28, minutes: 44, seconds: 0 }, sign: { id: 3  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 7  } },
+      { name: 'Mercury', longitude: { degrees: 4,  minutes: 28, seconds: 0 }, sign: { id: 2  }, is_retrograde: true,  is_exalted: false, is_debilitated: false, nakshatra: { id: 3  } },
+      { name: 'Jupiter', longitude: { degrees: 23, minutes: 39, seconds: 0 }, sign: { id: 2  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 5  } },
+      { name: 'Venus',   longitude: { degrees: 5,  minutes: 57, seconds: 0 }, sign: { id: 3  }, is_retrograde: false, is_exalted: false, is_debilitated: false, nakshatra: { id: 5  } },
+      { name: 'Saturn',  longitude: { degrees: 18, minutes: 51, seconds: 0 }, sign: { id: 9  }, is_retrograde: true,  is_exalted: false, is_debilitated: false, nakshatra: { id: 20 } },
       // South Node labelled "Rahu" by Prokerala → becomes Ketu after swap (Leo, 125.9°)
-      { name: 'Rahu',    degree: 125.9,   rasi: { id: 5  }, is_retrograde: true,  is_exalted: false, is_debilitated: false, nakshatra: { id: 10 } },
+      { name: 'Rahu',    longitude: { degrees: 5,  minutes: 54, seconds: 0 }, sign: { id: 5  }, is_retrograde: true,  is_exalted: false, is_debilitated: false, nakshatra: { id: 10 } },
       // North Node labelled "Ketu" by Prokerala → becomes Rahu after swap (Aquarius, 305.9°)
-      { name: 'Ketu',    degree: 305.9,   rasi: { id: 11 }, is_retrograde: true,  is_exalted: false, is_debilitated: false, nakshatra: { id: 23 } },
+      { name: 'Ketu',    longitude: { degrees: 5,  minutes: 54, seconds: 0 }, sign: { id: 11 }, is_retrograde: true,  is_exalted: false, is_debilitated: false, nakshatra: { id: 22 } },
     ],
   };
 }

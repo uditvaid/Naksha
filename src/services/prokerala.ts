@@ -264,15 +264,25 @@ function computeOffset(dateStr: string, timeStr: string, timezone: string): stri
 // ─── Parse planet positions from Prokerala response ──────────────────────────
 
 function parsePlanetPosition(planet: any, lagnaSignIndex: number): PlanetPosition {
-  let signIndex = (planet.rasi?.id ?? 1) - 1;
-  let degree = planet.degree ?? 0;
+  let signIndex: number;
+  let degree: number;
 
-  // Some Prokerala endpoints return the absolute sidereal longitude (0–360) in the
-  // `degree` field instead of the within-sign degree (0–30). A within-sign degree
-  // can never exceed 30, so anything above that is absolute longitude — recompute.
-  if (degree > 30) {
-    signIndex = Math.floor(degree / 30) % 12;
-    degree = degree % 30;
+  if (planet.longitude && typeof planet.longitude === 'object' && 'degrees' in planet.longitude) {
+    // Prokerala planet-position API shape:
+    //   sign.id  = 1-indexed zodiac sign
+    //   longitude = within-sign { degrees, minutes, seconds }
+    signIndex = (planet.sign?.id ?? 1) - 1;
+    degree = (planet.longitude.degrees ?? 0)
+           + (planet.longitude.minutes ?? 0) / 60
+           + (planet.longitude.seconds ?? 0) / 3600;
+  } else {
+    // Fallback / test shape: rasi.id + degree (absolute 0–360 or within-sign 0–30)
+    signIndex = (planet.rasi?.id ?? planet.sign?.id ?? 1) - 1;
+    degree = planet.degree ?? 0;
+    if (degree > 30) {
+      signIndex = Math.floor(degree / 30) % 12;
+      degree = degree % 30;
+    }
   }
 
   const house = ((signIndex - lagnaSignIndex + 12) % 12) + 1;
@@ -352,6 +362,7 @@ function computeFallbackLagnaSignIndex(birthData: BirthData): number {
 
 export async function generateChart(birthData: BirthData): Promise<ChartData> {
   const datetime = formatDateTime(birthData.dateOfBirth, birthData.timeOfBirth, birthData.timezone);
+  if (__DEV__) console.log('[Prokerala] datetime sent to API:', datetime, '| timezone:', birthData.timezone);
 
   const baseParams = {
     datetime,
