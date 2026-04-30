@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ExpoCrypto from 'expo-crypto';
 import { FREE_GURU_QUESTIONS_PER_DAY } from '../constants/astrology';
 
 type ResetListener = () => void;
@@ -91,6 +92,8 @@ export interface UserProfile {
   lastGuruDate: string | null;
   onboardingComplete: boolean;
   preferredSystem: 'vedic' | 'western';
+  aiDisclosureAcknowledged: boolean;
+  guruConsentGiven: boolean;
 }
 
 export interface GuruMessage {
@@ -105,6 +108,7 @@ interface AppState {
   user: UserProfile;
   guruMessages: GuruMessage[];
   isLoading: boolean;
+  pendingGuruContext: string | null;
   setUser: (user: Partial<UserProfile>) => void;
   setBirthData: (data: BirthData) => void;
   setChart: (chart: ChartData) => void;
@@ -119,6 +123,9 @@ interface AppState {
   deleteSavedReading: (id: string) => void;
   setOnboardingComplete: () => void;
   setLoading: (loading: boolean) => void;
+  acknowledgeAIDisclosure: () => void;
+  giveGuruConsent: () => void;
+  setPendingGuruContext: (context: string | null) => void;
   reset: () => void;
 }
 
@@ -134,6 +141,8 @@ const defaultUser: UserProfile = {
   lastGuruDate: null,
   onboardingComplete: false,
   preferredSystem: 'vedic',
+  aiDisclosureAcknowledged: false,
+  guruConsentGiven: false,
 };
 
 export const useAppStore = create<AppState>()(
@@ -142,6 +151,7 @@ export const useAppStore = create<AppState>()(
       user: defaultUser,
       guruMessages: [],
       isLoading: false,
+      pendingGuruContext: null,
 
       setUser: (update) =>
         set((state) => ({ user: { ...state.user, ...update } })),
@@ -203,7 +213,7 @@ export const useAppStore = create<AppState>()(
       saveReading: (reading) => {
         const newReading: SavedReading = {
           ...reading,
-          id: crypto.randomUUID(),
+          id: ExpoCrypto.randomUUID(),
           createdAt: new Date().toISOString(),
         };
         set((state) => ({
@@ -226,6 +236,14 @@ export const useAppStore = create<AppState>()(
       setOnboardingComplete: () =>
         set((state) => ({ user: { ...state.user, onboardingComplete: true } })),
 
+      acknowledgeAIDisclosure: () =>
+        set((state) => ({ user: { ...state.user, aiDisclosureAcknowledged: true } })),
+
+      giveGuruConsent: () =>
+        set((state) => ({ user: { ...state.user, guruConsentGiven: true } })),
+
+      setPendingGuruContext: (context) => set({ pendingGuruContext: context }),
+
       setLoading: (loading) => set({ isLoading: loading }),
 
       reset: () => {
@@ -238,17 +256,29 @@ export const useAppStore = create<AppState>()(
     {
       name: 'nakshatra-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
-      migrate: (persistedState: any, _version: number) => {
-        if (persistedState?.user && 'notificationsEnabled' in persistedState.user) {
-          const { notificationsEnabled: _dropped, ...rest } = persistedState.user;
-          return { ...persistedState, user: rest };
+      version: 3,
+      migrate: (persistedState: any, version: number) => {
+        let state = persistedState;
+        if (version < 2 && state?.user && 'notificationsEnabled' in state.user) {
+          const { notificationsEnabled: _dropped, ...rest } = state.user;
+          state = { ...state, user: rest };
         }
-        return persistedState;
+        if (version < 3 && state?.user) {
+          state = {
+            ...state,
+            user: {
+              ...state.user,
+              aiDisclosureAcknowledged: state.user.aiDisclosureAcknowledged ?? false,
+              guruConsentGiven: state.user.guruConsentGiven ?? false,
+            },
+          };
+        }
+        return state;
       },
       partialize: (state) => ({
         user: state.user,
         guruMessages: state.guruMessages.slice(-50),
+        // pendingGuruContext is intentionally excluded — session-only
       }),
     }
   )

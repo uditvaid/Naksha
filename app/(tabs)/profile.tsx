@@ -6,7 +6,6 @@ import Constants from 'expo-constants';
 import { useAppStore } from '@store/userStore';
 import { restorePurchases, isPremiumActive } from '@services/revenuecat';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
-import { PLANETS } from '@constants/astrology';
 import { TEST_MODE, BUILD_PROFILE, PROXY_BASE_URL, REVENUECAT_IOS_KEY } from '@constants/config';
 import { getDailyReading } from '@services/claude';
 import { generateChart } from '@services/prokerala';
@@ -124,26 +123,6 @@ export default function ProfileScreen() {
                   ? <ActivityIndicator size="small" color={Colors.gold} />
                   : <Text style={styles.editBtnText}>Regenerate Chart</Text>}
               </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Chart snapshot */}
-        {chart && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>CHART SNAPSHOT</Text>
-            <View style={styles.planetMiniGrid}>
-              {chart.planets.map(p => {
-                const pd = PLANETS.find(pl => pl.id === p.planet.toLowerCase());
-                return (
-                  <View key={p.planet} style={styles.planetMiniCard}>
-                    <Text style={[styles.planetMiniSymbol, { color: pd?.color ?? Colors.gold }]}>{pd?.symbol ?? '◉'}</Text>
-                    <Text style={styles.planetMiniName}>{p.planet}</Text>
-                    <Text style={styles.planetMiniSign}>{p.sign}</Text>
-                    <Text style={styles.planetMiniHouse}>H{p.house}</Text>
-                  </View>
-                );
-              })}
             </View>
           </View>
         )}
@@ -326,12 +305,6 @@ const styles = StyleSheet.create({
   editBtnRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, marginTop: 8 },
   editBtn: { alignSelf: 'flex-end' },
   editBtnText: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },
-  planetMiniGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  planetMiniCard: { width: '30%', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 10, alignItems: 'center', gap: 3 },
-  planetMiniSymbol: { fontSize: 18 },
-  planetMiniName: { fontSize: 10, fontFamily: Fonts.cinzel, color: Colors.muted, letterSpacing: 0.5 },
-  planetMiniSign: { fontSize: 11, fontFamily: Fonts.crimson, color: Colors.star },
-  planetMiniHouse: { fontSize: 9, color: Colors.gold, fontFamily: Fonts.cinzel },
   savedChartCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 12, marginBottom: 8 },
   savedChartAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold, alignItems: 'center', justifyContent: 'center' },
   savedChartAvatarText: { fontSize: 18, fontFamily: Fonts.cinzel, color: Colors.gold },

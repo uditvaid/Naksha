@@ -9,6 +9,7 @@ module.exports = {
     '^@store/(.*)$': '<rootDir>/src/store/$1',
     '^@utils/(.*)$': '<rootDir>/src/utils/$1',
     '^@hooks/(.*)$': '<rootDir>/src/hooks/$1',
+    '^@lib/(.*)$': '<rootDir>/src/lib/$1',
   },
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],
   transformIgnorePatterns: [

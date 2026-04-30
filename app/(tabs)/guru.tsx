@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback, memo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { useState, useRef, useCallback, memo, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import * as ExpoCrypto from 'expo-crypto';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -70,11 +71,11 @@ function getDashaQuestions(chart: any): { questions: string[]; dashaLord?: strin
   return { questions, dashaLord: activeDasha.planet };
 }
 
-const genId = () => crypto.randomUUID();
+const genId = () => ExpoCrypto.randomUUID();
 
 export default function GuruScreen() {
   const {
-    birthData, chart, isPremium, guruQuestionsToday, lastGuruDate, messages,
+    birthData, chart, isPremium, guruQuestionsToday, lastGuruDate, messages, guruConsentGiven, pendingGuruContext,
   } = useAppStore(useShallow(s => ({
     birthData: s.user.birthData,
     chart: s.user.chart,
@@ -82,16 +83,30 @@ export default function GuruScreen() {
     guruQuestionsToday: s.user.guruQuestionsToday,
     lastGuruDate: s.user.lastGuruDate,
     messages: s.guruMessages,
+    guruConsentGiven: s.user.guruConsentGiven,
+    pendingGuruContext: s.pendingGuruContext,
   })));
   const addMessage = useAppStore(s => s.addGuruMessage);
   const incrementQuestions = useAppStore(s => s.incrementGuruQuestions);
   const canAsk = useAppStore(s => s.canAskGuru);
   const saveReading = useAppStore(s => s.saveReading);
   const clearMessages = useAppStore(s => s.clearGuruMessages);
+  const giveGuruConsent = useAppStore(s => s.giveGuruConsent);
+  const setPendingGuruContext = useAppStore(s => s.setPendingGuruContext);
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  // Pre-fill input when arriving from chart screen via "Ask Guru"
+  useEffect(() => {
+    if (pendingGuruContext) {
+      setInput(pendingGuruContext + ' ');
+      setPendingGuruContext(null);
+    }
+  }, [pendingGuruContext]);
 
   const questionsLeft = isPremium
     ? '∞'
@@ -108,6 +123,12 @@ export default function GuruScreen() {
 
     if (!canAsk()) {
       router.push('/paywall');
+      return;
+    }
+
+    if (!guruConsentGiven) {
+      setPendingQuestion(question);
+      setShowConsentModal(true);
       return;
     }
 
@@ -154,7 +175,55 @@ export default function GuruScreen() {
       setLoading(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
     }
-  }, [input, loading, birthData, chart, canAsk]);
+  }, [input, loading, birthData, chart, canAsk, guruConsentGiven]);
+
+  const handleConsentAccept = useCallback(async () => {
+    giveGuruConsent();
+    setShowConsentModal(false);
+    const q = pendingQuestion;
+    setPendingQuestion(null);
+    if (q) {
+      setInput('');
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const userMsg = {
+        id: genId(),
+        role: 'user' as const,
+        content: q,
+        timestamp: new Date().toISOString(),
+      };
+      addMessage(userMsg);
+      setLoading(true);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      try {
+        const currentMessages = useAppStore.getState().guruMessages;
+        const response = await askGuru(q, currentMessages, birthData!, chart);
+        incrementQuestions();
+        addMessage({
+          id: genId(),
+          role: 'assistant',
+          content: response,
+          timestamp: new Date().toISOString(),
+        });
+        saveReading({
+          type: 'guru',
+          title: q.slice(0, 50) + (q.length > 50 ? '…' : ''),
+          preview: response.slice(0, 120) + '…',
+          content: response,
+          question: q,
+        });
+      } catch {
+        addMessage({
+          id: genId(),
+          role: 'assistant',
+          content: 'The cosmic connection wavered. Please try again.',
+          timestamp: new Date().toISOString(),
+        });
+      } finally {
+        setLoading(false);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
+      }
+    }
+  }, [pendingQuestion, birthData, chart]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -229,7 +298,30 @@ export default function GuruScreen() {
             <Text style={styles.sendBtnText}>✦</Text>
           </TouchableOpacity>
         </View>
+
+        {/* AI caveat footer */}
+        <Text style={styles.aicaveat}>
+          Responses draw on classical Vedic texts and recognized astrological tradition, delivered through AI — for reflection, not as a substitute for professional advice
+        </Text>
       </KeyboardAvoidingView>
+
+      {/* Guru consent modal (shown once, first interaction — Apple 5.1.2(i)) */}
+      <Modal visible={showConsentModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>🔱 Before You Ask the Guru</Text>
+            <Text style={styles.modalBody}>
+              The Guru uses <Text style={styles.modalBold}>Claude AI by Anthropic</Text>. Your name, birth date, birth place, chart data, and questions are sent to generate responses. No other personal data is shared.
+            </Text>
+            <TouchableOpacity style={styles.modalAccept} onPress={handleConsentAccept}>
+              <Text style={styles.modalAcceptText}>Got It — Continue ✦</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalDecline} onPress={() => { setShowConsentModal(false); setPendingQuestion(null); }}>
+              <Text style={styles.modalDeclineText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -250,9 +342,6 @@ const WelcomeState = memo(function WelcomeState({ onSelect, questions, dashaLord
           <Text style={styles.suggestionText}>{q}</Text>
         </TouchableOpacity>
       ))}
-      <Text style={styles.disclaimer}>
-        All responses are AI-generated using classical Vedic texts as context. Readings are for spiritual self-inquiry and entertainment only — they do not constitute medical, legal, financial, or mental health advice. If you are experiencing a mental health concern, please consult a qualified professional.
-      </Text>
     </View>
   );
 });
@@ -305,4 +394,14 @@ const styles = StyleSheet.create({
   sendBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.gold, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' },
   sendBtnDisabled: { opacity: 0.3 },
   sendBtnText: { fontSize: 16, color: Colors.midnight },
+  aicaveat: { fontSize: 10, color: Colors.mutedDark, textAlign: 'center', paddingHorizontal: Spacing.lg, paddingBottom: 8, fontFamily: Fonts.cormorantItalic },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
+  modalCard: { backgroundColor: '#0D1220', borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.lg, width: '100%', maxWidth: 400 },
+  modalTitle: { fontSize: 18, fontFamily: Fonts.cinzel, color: Colors.gold, textAlign: 'center', marginBottom: Spacing.md },
+  modalBody: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, marginBottom: Spacing.lg },
+  modalBold: { fontFamily: Fonts.cinzelBold, color: Colors.gold },
+  modalAccept: { backgroundColor: Colors.gold, borderRadius: Radius.lg, padding: 16, alignItems: 'center', marginBottom: 10 },
+  modalAcceptText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5 },
+  modalDecline: { alignItems: 'center', padding: 10 },
+  modalDeclineText: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cinzel },
 });

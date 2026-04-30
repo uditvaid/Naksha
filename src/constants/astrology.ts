@@ -147,7 +147,7 @@ export const SUBSCRIPTION_PRODUCTS = {
   lifetime: 'lifetime',
 };
 
-export const FREE_GURU_QUESTIONS_PER_DAY = 3;
+export const FREE_GURU_QUESTIONS_PER_DAY = 2;
 
 export const PLANETS_BY_ID: Map<string, typeof PLANETS[number]> = new Map(
   PLANETS.map(p => [p.id, p])

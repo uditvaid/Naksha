@@ -24,6 +24,34 @@ export default function LalKitabScreen() {
   const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null);
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchReading = async () => {
+    if (!user.birthData) {
+      Alert.alert('Birth Details Required', 'Please complete your birth details in onboarding before requesting a reading.', [
+        { text: 'Set Up', onPress: () => router.replace('/onboarding') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await getLalKitabReading(user.birthData, user.chart, selectedPlanet ?? undefined);
+      setReading(result);
+      saveReading({
+        type: 'lalkitab',
+        title: selectedPlanet ? `Lal Kitab · ${selectedPlanet}` : 'Lal Kitab Reading',
+        preview: result.slice(0, 120),
+        content: result,
+      });
+    } catch (e: any) {
+      if (__DEV__) console.error('[LalKitab] fetchReading error:', e);
+      setError(e?.message ?? 'Could not fetch the reading. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!user.isPremium) {
     return (
@@ -45,25 +73,6 @@ export default function LalKitabScreen() {
     );
   }
 
-  const fetchReading = async () => {
-    if (!user.birthData) return;
-    setLoading(true);
-    try {
-      const result = await getLalKitabReading(user.birthData, user.chart, selectedPlanet ?? undefined);
-      setReading(result);
-      saveReading({
-        type: 'lalkitab',
-        title: selectedPlanet ? `Lal Kitab · ${selectedPlanet}` : 'Lal Kitab Reading',
-        preview: result.slice(0, 120),
-        content: result,
-      });
-    } catch (e: any) {
-      Alert.alert('Reading Unavailable', e?.message ?? 'Could not fetch the reading. Please check your connection and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const planets = Object.keys(LAL_KITAB_REMEDIES);
 
   return (
@@ -82,6 +91,10 @@ export default function LalKitabScreen() {
             Lal Kitab offers simple, powerful remedies (upay) to pacify malefic planets and strengthen benefics. These are practical actions — no rituals required.
           </Text>
         </View>
+
+        <Text style={styles.disclaimer}>
+          Lal Kitab is a recognized 19th-century Urdu astrological text within the Vedic tradition. The remedies listed here are drawn directly from that source and are cultural and spiritual in nature — not medical prescriptions. The personalized analysis is AI-generated based on your chart and this tradition; interpretation may vary between practitioners. Consult a qualified professional for health, legal, or financial decisions.
+        </Text>
 
         {/* Planet selector */}
         <View style={styles.planetSection}>
@@ -131,9 +144,14 @@ export default function LalKitabScreen() {
 
         {/* AI reading */}
         {reading === '' && !loading && (
-          <TouchableOpacity style={styles.readingBtn} onPress={fetchReading}>
-            <Text style={styles.readingBtnText}>✦ Get My Personalized Lal Kitab Analysis ✦</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity style={styles.readingBtn} onPress={fetchReading}>
+              <Text style={styles.readingBtnText}>✦ Get My Personalized Lal Kitab Analysis ✦</Text>
+            </TouchableOpacity>
+            {error !== '' && (
+              <Text style={styles.errorText}>{error}</Text>
+            )}
+          </>
         )}
 
         {loading && (
@@ -167,6 +185,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 2 },
   intro: { marginHorizontal: Spacing.md, marginBottom: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
   introText: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 22 },
+  disclaimer: { fontSize: 11, color: Colors.mutedDark, fontFamily: Fonts.cormorantItalic, lineHeight: 17, marginHorizontal: Spacing.md, marginBottom: Spacing.md },
   planetSection: { marginBottom: Spacing.md },
   sectionTitle: { fontSize: 10, letterSpacing: 2, color: Colors.muted, fontFamily: Fonts.cinzel, paddingHorizontal: Spacing.md, marginBottom: 10 },
   planetScroll: { paddingHorizontal: Spacing.md },
@@ -196,6 +215,7 @@ const styles = StyleSheet.create({
   readingText: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 26 },
   resetBtn: { marginTop: Spacing.md, alignItems: 'center' },
   resetBtnText: { fontSize: 13, color: Colors.gold, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },
+  errorText: { fontSize: 13, color: Colors.ruby, fontFamily: Fonts.crimson, textAlign: 'center', marginHorizontal: Spacing.md, marginTop: 8, lineHeight: 20 },
   lockedState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: 16 },
   lockedIcon: { fontSize: 56 },
   lockedTitle: { fontSize: 26, fontFamily: Fonts.cinzel, color: Colors.gold },

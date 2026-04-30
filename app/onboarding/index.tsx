@@ -503,18 +503,23 @@ export default function OnboardingScreen() {
           )}
 
           {!showTimePicker && (
-            <TouchableOpacity
-              style={[styles.unknownTimeBtn, timeUnknown && styles.unknownTimeBtnActive]}
-              onPress={() => {
-                setTimeUnknown(!timeUnknown);
-                setShowTimePicker(false);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-            >
-              <Text style={[styles.unknownTimeBtnText, timeUnknown && { color: Colors.gold }]}>
-                {timeUnknown ? '✓ Time unknown — using noon' : 'I don\'t know my birth time'}
+            <>
+              <TouchableOpacity
+                style={[styles.unknownTimeBtn, timeUnknown && styles.unknownTimeBtnActive]}
+                onPress={() => {
+                  setTimeUnknown(!timeUnknown);
+                  setShowTimePicker(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <Text style={[styles.unknownTimeBtnText, timeUnknown && { color: Colors.gold }]}>
+                  {timeUnknown ? '✓ Time unknown — using noon' : 'I don\'t know my birth time'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.timeWarning}>
+                Your rising sign (Lagna) can shift with as little as a 4-minute error. Check your birth certificate or hospital records for precision.
               </Text>
-            </TouchableOpacity>
+            </>
           )}
         </View>
 
@@ -547,7 +552,8 @@ export default function OnboardingScreen() {
               <Text style={styles.geocodeChipCheck}>✓</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.geocodeChipCity}>{shortenResolvedName(geocodeResult.resolvedName ?? place)}</Text>
-                <Text style={styles.geocodeChipCoords}>{formatCoords(geocodeResult.latitude, geocodeResult.longitude)}</Text>
+                <Text style={styles.geocodeChipCoords}>{formatCoords(geocodeResult.latitude, geocodeResult.longitude)} · {geocodeResult.timezone}</Text>
+                <Text style={styles.geocodeChipConfirm}>Confirm this is the correct location before continuing</Text>
               </View>
             </View>
           )}
@@ -603,8 +609,11 @@ export default function OnboardingScreen() {
           )}
 
           {step === 3 && (
-            <TouchableOpacity onPress={handleNext} style={styles.skipBtn}>
-              <Text style={styles.skipBtnText}>Skip →</Text>
+            <TouchableOpacity
+              onPress={() => { setTimeUnknown(true); setShowTimePicker(false); handleNext(); }}
+              style={styles.skipBtn}
+            >
+              <Text style={styles.skipBtnText}>Skip — I'll use noon ↓</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -679,6 +688,7 @@ const styles = StyleSheet.create({
   },
   unknownTimeBtnActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
   unknownTimeBtnText: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cinzel },
+  timeWarning: { fontSize: 11, color: Colors.mutedDark, fontFamily: Fonts.cormorantItalic, lineHeight: 17, marginTop: 12 },
 
   // Generating
   generatingContent: { alignItems: 'center', gap: 12 },
@@ -731,6 +741,9 @@ const styles = StyleSheet.create({
   },
   geocodeChipCoords: {
     fontSize: 11, fontFamily: Fonts.cormorantItalic, color: Colors.muted, marginTop: 2,
+  },
+  geocodeChipConfirm: {
+    fontSize: 10, fontFamily: Fonts.cinzel, color: Colors.emerald + 'CC', marginTop: 4, letterSpacing: 0.3,
   },
   geocodeChipText: {
     fontSize: 13, fontFamily: Fonts.cormorantItalic, color: Colors.muted, flex: 1,

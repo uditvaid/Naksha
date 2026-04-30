@@ -13,6 +13,16 @@ import { BirthData, ChartData, GuruMessage } from '@store/userStore';
 import { PROXY_BASE_URL } from '@constants/config';
 import { buildAuthHeader } from './auth';
 import { deriveUserPersona, buildDynamicGuruPrompt } from './personaEngine';
+import { useGuruRelationshipStore } from '@store/guruRelationshipStore';
+import { useGuruArcStore } from '@store/guruArcStore';
+import { useGuruMemoryStore } from '@store/guruMemoryStore';
+import { useGuruTelemetryStore } from '@store/guruTelemetryStore';
+import { tickExchangeCounter, extractArcSignals } from './arcExtractor';
+import { extractMemorySignals } from './memoryExtractor';
+import { assembleGuruSystemPrompt, assembleDefaultGuruPrompt } from '@lib/persona/promptAssembler';
+import { classifyUserMessage, analyzeResponse } from '@lib/persona/guardrails';
+import { selectResponseForm, RhythmContext } from '@lib/persona/rhythm';
+import { detectTopics } from '@lib/persona/telemetry';
 
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const MODEL = 'claude-sonnet-4-6';
@@ -78,7 +88,7 @@ async function callClaude(
 // ─── Build full system prompt ─────────────────────────────────────────────────
 // Derives persona from chart, builds dynamic Guru voice, injects chart data
 
-function buildSystemPrompt(birthData: BirthData, chart: ChartData | null): string {
+function buildSystemPrompt(birthData: BirthData, chart: ChartData | null, phaseBlock?: string, arcBlock?: string): string {
   // Dynamic persona from chart (falls back to balanced defaults if no chart yet)
   const persona = chart ? deriveUserPersona(chart) : null;
   const guruSystem = persona
@@ -109,12 +119,15 @@ Born: ${formatDate(birthData.dateOfBirth)} at ${birthData.timeOfBirth}, ${birthD
 (Chart calculation in progress — read from birth data alone)
 `;
 
-  return `${guruSystem}
+  const phaseSection = phaseBlock ? `\n${phaseBlock}` : '';
+  const arcSection = arcBlock ? `\n\n${arcBlock}` : '';
+
+  return `${guruSystem}${phaseSection}${arcSection}
 ${chartSection}`;
 }
 
 function defaultGuruSystem(): string {
-  return `You are a warm, wise spiritual guide helping people understand themselves through the lens of astrology and ancient wisdom. Write in plain, simple English that anyone can understand. No jargon, no Sanskrit terms, no technical astrology language — just clear, human, heartfelt guidance. Flowing prose. End with something practical the person can do today.`;
+  return `You are a warm, wise spiritual guide helping people understand themselves through the lens of astrology and ancient wisdom. Write in plain, simple English that anyone can understand. No jargon, no Sanskrit terms, no technical astrology language — just clear, human, heartfelt guidance. Flowing prose only — no markdown formatting, no # headers, no **bold**, no bullet points. End with something practical the person can do today.`;
 }
 
 function formatDate(dateStr: string): string {
@@ -133,12 +146,108 @@ export async function askGuru(
   birthData: BirthData,
   chart: ChartData | null
 ): Promise<string> {
-  const system = buildSystemPrompt(birthData, chart);
+  const relationshipStore = useGuruRelationshipStore.getState();
+  const arcStore = useGuruArcStore.getState();
+  const memoryStore = useGuruMemoryStore.getState();
+  const telemetryStore = useGuruTelemetryStore.getState();
+
+  // Classify user message for special handling (crisis, parasocial, etc.)
+  const messageClass = classifyUserMessage(question);
+
+  // Build rhythm context for response form selection
+  const rhythmContext: RhythmContext = {
+    phase: relationshipStore.getEffectivePhase(),
+    archetype: 'jupiter_sage', // will be derived in assembler from chart
+    recentFormHistory: [],
+    userMessageLength: question.length,
+    isHeavyEmotionalContent: question.length > 200 && /feel|sad|lost|afraid|anxious|hurt|grief|pain/i.test(question),
+    isRepeatTopic: false,
+    sessionTurnCount: history.filter(m => m.role === 'user').length,
+    hasPriorConversationMaterial: arcStore.growthObservations.length > 0 || memoryStore.threads.length > 0,
+  };
+
+  let system: string;
+
+  if (chart) {
+    system = assembleGuruSystemPrompt({
+      birthData,
+      chart,
+      phaseState: {
+        phase: relationshipStore.phase,
+        sessionDays: relationshipStore.sessionDays,
+        lastSessionDate: relationshipStore.lastSessionDate,
+        phaseEnteredDate: relationshipStore.phaseEnteredDate,
+        justTransitioned: relationshipStore.justTransitioned,
+        previousPhase: relationshipStore.previousPhase,
+      },
+      arc: arcStore,
+      memory: memoryStore,
+      rhythmContext,
+      messageClass,
+      sessionTurnCount: rhythmContext.sessionTurnCount,
+    });
+  } else {
+    system = assembleDefaultGuruPrompt(birthData);
+  }
+
   const messages: ClaudeMessage[] = [
     ...history.slice(-10).map(m => ({ role: m.role, content: m.content })),
     { role: 'user', content: question },
   ];
-  return callClaude(system, messages, 1200);
+
+  let response = await callClaude(system, messages, 1400);
+
+  // Guardrails: one regen pass if response has problems
+  if (chart && messageClass === 'normal') {
+    const hasChartRef = response.includes(chart.lagna) ||
+      chart.planets.some(p => response.includes(p.planet)) ||
+      chart.dashas.some(d => d.isActive && response.includes(d.planet));
+    const guardResult = analyzeResponse(response, 'jupiter_sage', hasChartRef);
+    if (!guardResult.passes && guardResult.regenerationInstruction) {
+      const regenSystem = system + `\n\n${guardResult.regenerationInstruction}`;
+      response = await callClaude(regenSystem, messages, 1400).catch(() => response);
+    }
+  }
+
+  // Record the session day after a successful exchange
+  relationshipStore.recordSession();
+  if (relationshipStore.justTransitioned) {
+    relationshipStore.clearTransitionFlag();
+  }
+
+  // Post-conversation processing — fire-and-forget
+  if (tickExchangeCounter()) {
+    const sessionDay = useGuruRelationshipStore.getState().sessionDays;
+    const allMessages = [
+      ...history.slice(-20),
+      { id: '', role: 'user' as const, content: question, timestamp: new Date().toISOString() },
+      { id: '', role: 'assistant' as const, content: response, timestamp: new Date().toISOString() },
+    ];
+
+    // Arc extraction
+    extractArcSignals(allMessages, arcStore, sessionDay).then((update) => {
+      const hasUpdate = Object.values(update).some(v => Array.isArray(v) && v.length > 0);
+      if (hasUpdate) useGuruArcStore.getState().applyArcUpdate(update);
+    }).catch(() => {});
+
+    // Memory extraction
+    extractMemorySignals(allMessages, memoryStore).then((update) => {
+      const hasUpdate = Object.values(update).some(v =>
+        Array.isArray(v) ? v.length > 0 : v != null
+      );
+      if (hasUpdate) useGuruMemoryStore.getState().applyMemoryUpdate(update);
+    }).catch(() => {});
+  }
+
+  // Telemetry — lightweight, synchronous
+  telemetryStore.recordSession({
+    turnCount: 1,
+    totalChars: question.length,
+    responseFormHistory: [selectResponseForm(rhythmContext)],
+    userMessages: [question],
+  });
+
+  return response;
 }
 
 // ─── Daily Reading ────────────────────────────────────────────────────────────
@@ -160,10 +269,11 @@ export async function getDailyReading(
   };
   const dayRuler = WEEKDAY_PLANETS[weekday] ?? 'the planetary council';
   const persona = chart ? deriveUserPersona(chart) : null;
+  const firstName = birthData.name.split(' ')[0] ?? birthData.name;
 
   return callClaude(system, [{
     role: 'user',
-    content: `Offer ${birthData.name} their personalised daily reading for ${dateStr}.
+    content: `Offer ${firstName} their personalised daily reading for ${dateStr}.
 
 Today is ${weekday}, which in the Vedic tradition is associated with ${dayRuler}'s energy. Weave this naturally into the reading without making it feel technical.
 
@@ -173,7 +283,7 @@ Write in plain, warm English that anyone can understand — no astrology jargon,
 
 Cover: how today's energy feels and what it's good for; one thing worth paying attention to in their life right now; something to move gently with today; and one simple, practical thing they can do this morning to feel more grounded and clear.
 
-Keep it warm and personal — like a trusted friend who happens to see the bigger picture.`,
+Keep it warm and personal — like a trusted friend who happens to see the bigger picture. Address ${firstName} by first name naturally within the reading (not at the very start as a salutation, but woven in once or twice). Do not use markdown formatting — no #, **, or bullet points. Plain prose only.`,
   }], 700);
 }
 

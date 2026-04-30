@@ -319,11 +319,18 @@ function parsePlanetPosition(planet: any, lagnaSignIndex: number): PlanetPositio
 
 // ─── Fallback lagna computation ───────────────────────────────────────────────
 
+// Parse "+05:30" / "-05:00" → numeric hours (DST-aware via computeOffset).
+function offsetStrToHours(offsetStr: string): number {
+  const sign = offsetStr[0] === '-' ? -1 : 1;
+  const parts = offsetStr.slice(1).split(':');
+  return sign * (parseInt(parts[0] ?? '0', 10) + parseInt(parts[1] ?? '0', 10) / 60);
+}
+
 function computeFallbackLagnaSignIndex(birthData: BirthData): number {
   try {
     const [hStr, mStr] = (birthData.timeOfBirth || '12:00').split(':');
     const localHour = parseInt(hStr ?? '12', 10) + parseInt(mStr ?? '0', 10) / 60;
-    const tzOffset = FALLBACK_TZ_OFFSETS[birthData.timezone] ?? 5.5;
+    const tzOffset = offsetStrToHours(computeOffset(birthData.dateOfBirth, birthData.timeOfBirth || '12:00', birthData.timezone));
     const utcHour = ((localHour - tzOffset) % 24 + 24) % 24;
 
     const date = new Date(birthData.dateOfBirth);
@@ -347,7 +354,8 @@ function computeFallbackLagnaSignIndex(birthData: BirthData): number {
       -Math.cos(lstRad),
       Math.sin(lstRad) * Math.cos(obliquity) + Math.tan(latRad) * Math.sin(obliquity)
     );
-    let ascDeg = (ascRad * 180) / Math.PI;
+    // atan2 formula gives the descendant (western horizon); +180° converts to ascendant.
+    let ascDeg = (ascRad * 180) / Math.PI + 180;
     ascDeg = ((ascDeg % 360) + 360) % 360;
 
     const ayanamsa = 23.853 + (year - 2000) * 0.01396;
@@ -563,7 +571,9 @@ function buildFallbackPlanets(lagnaSignIndex: number, birthData: BirthData): Pla
   // Without this, the JD is for UTC midnight and Moon can be off by a full nakshatra.
   const [hStr, mStr] = (birthData.timeOfBirth || '12:00').split(':');
   const localHour = parseInt(hStr ?? '12', 10) + parseInt(mStr ?? '0', 10) / 60;
-  const tzOffset = FALLBACK_TZ_OFFSETS[birthData.timezone] ?? 5.5;
+  // Use computeOffset (Intl.DateTimeFormat-backed) for the actual birth date so historical
+  // DST rules are respected — e.g. US before 1987, India before 1945.
+  const tzOffset = offsetStrToHours(computeOffset(birthData.dateOfBirth, birthData.timeOfBirth || '12:00', birthData.timezone));
   const utcHour = ((localHour - tzOffset) % 24 + 24) % 24;
   const dayFraction = utcHour / 24;
 
@@ -585,16 +595,48 @@ function buildFallbackPlanets(lagnaSignIndex: number, birthData: BirthData): Pla
     + 0.214 * Math.sin(2 * Mp)
     - 0.186 * Math.sin(Ms);
 
-  // Simplified mean longitudes (degrees)
+  // Sun's mean longitude and equation of center
+  const sunGeo = 280.46646 + 36000.76983 * T;
+  // Sun equation of center: converts mean → true geocentric longitude (~1° improvement)
+  const sunTrue = sunGeo + 1.914 * Math.sin(Ms) + 0.020 * Math.sin(2 * Ms);
+  // Earth's true heliocentric longitude = Sun true geocentric + 180°
+  const earthHelioTrue = sunTrue + 180;
+
+  // Geocentric longitude from heliocentric: works for ALL planets (inner and outer).
+  // r_E = 1 AU; r_planet in AU. Uses Earth's TRUE heliocentric position for accuracy.
+  const geoFromHelio = (L_planet: number, r_planet: number): number => {
+    const Lp = (L_planet * Math.PI) / 180;
+    const Le = (earthHelioTrue * Math.PI) / 180;
+    const y = r_planet * Math.sin(Lp) - Math.sin(Le);
+    const x = r_planet * Math.cos(Lp) - Math.cos(Le);
+    return (Math.atan2(y, x) * 180) / Math.PI;
+  };
+
+  // Equation of center (degrees) for a planet with eccentricity e, mean anomaly M_deg.
+  // Two-term approximation; accurate to ~0.01° for solar system planets.
+  const eqCenter = (e: number, M_deg: number): number => {
+    const M = (M_deg * Math.PI) / 180;
+    return (2 * e - Math.pow(e, 3) / 4) * (180 / Math.PI) * Math.sin(M)
+      + (5 * Math.pow(e, 2) / 4) * (180 / Math.PI) * Math.sin(2 * M);
+  };
+
+  // Outer-planet geocentric: apply equation of center to get true helio longitude, then
+  // convert to geocentric via vector subtraction from Earth. Required because mean helio
+  // longitude for Mars can be ~18° off from the geocentric value the user sees on screen.
+  const outerGeo = (L_mean: number, M_deg: number, e: number, r: number): number =>
+    geoFromHelio(L_mean + eqCenter(e, M_deg), r);
+
   const rawPositions: Record<string, number> = {
-    Sun: (280.46646 + 36000.76983 * T) % 360,
-    Moon: moonTrue % 360,
-    Mars: (355.433 + 19140.2993 * T) % 360,
-    Mercury: (252.2509 + 149472.6746 * T) % 360,
-    Jupiter: (34.3515 + 3034.9057 * T) % 360,
-    Venus: (181.9798 + 58517.8156 * T) % 360,
-    Saturn: (50.0775 + 1222.1138 * T) % 360,
-    Rahu: (125.0445 - 1934.1363 * T) % 360,
+    Sun:     sunTrue,
+    Moon:    moonTrue % 360,
+    Mercury: geoFromHelio(252.2509 + 149472.6746 * T, 0.387),
+    Venus:   geoFromHelio(181.9798 +  58517.8156 * T, 0.723),
+    // Outer planets need true heliocentric + geocentric vector conversion.
+    // Using mean longitude directly (old code) put Mars ~18° off: Cancer instead of Gemini.
+    Mars:    outerGeo(355.433 + 19140.2993 * T,  19.373 + 19140.2993 * T, 0.09341, 1.524),
+    Jupiter: outerGeo( 34.352 +  3034.9057 * T,  20.020 +  3034.6748 * T, 0.04849, 5.203),
+    Saturn:  outerGeo( 50.077 +  1222.1138 * T, 317.020 +  1221.5515 * T, 0.05415, 9.537),
+    Rahu:    (125.0445 - 1934.1363 * T) % 360,
   };
 
   // Apply Lahiri ayanamsa
@@ -622,18 +664,28 @@ function buildFallbackPlanets(lagnaSignIndex: number, birthData: BirthData): Pla
       isExalted: false,
       isDebilitated: false,
     };
-  }).concat([{
-    planet: 'Ketu',
-    sign: SIGNS[(Math.floor(((((125.0445 - 1934.1363 * T) % 360) - ayanamsa + 180) % 360 + 360) % 360 / 30))] ?? 'Aries',
-    signIndex: Math.floor(((((125.0445 - 1934.1363 * T) % 360) - ayanamsa + 180) % 360 + 360) % 360 / 30),
-    degree: 0,
-    house: ((Math.floor(((((125.0445 - 1934.1363 * T) % 360) - ayanamsa + 180) % 360 + 360) % 360 / 30) - lagnaSignIndex + 12) % 12) + 1,
-    nakshatra: 'Magha',
-    pada: 1,
-    isRetrograde: false,
-    isExalted: false,
-    isDebilitated: false,
-  }]);
+  }).concat((() => {
+    // Derive Ketu exactly opposite Rahu (mean node + 180°)
+    const rahuTropical = (125.0445 - 1934.1363 * T) % 360;
+    const ketuTropical = rahuTropical + 180;
+    const ketuSidereal = ((ketuTropical - ayanamsa) % 360 + 360) % 360;
+    const ketuSignIndex = Math.floor(ketuSidereal / 30);
+    const nakWidth = 360 / 27;
+    const ketuNakIdx = Math.floor(ketuSidereal / nakWidth) % 27;
+    const ketuPada = Math.min(Math.floor((ketuSidereal % nakWidth) / (nakWidth / 4)) + 1, 4);
+    return [{
+      planet: 'Ketu',
+      sign: SIGNS[ketuSignIndex] ?? 'Aries',
+      signIndex: ketuSignIndex,
+      degree: Math.round((ketuSidereal % 30) * 100) / 100,
+      house: ((ketuSignIndex - lagnaSignIndex + 12) % 12) + 1,
+      nakshatra: NAKSHATRA_NAMES[ketuNakIdx] ?? 'Ashwini',
+      pada: ketuPada,
+      isRetrograde: true,
+      isExalted: false,
+      isDebilitated: false,
+    }];
+  })());
 }
 
 function buildFallbackDashas(planets: PlanetPosition[], birthData: BirthData): DashaPeriod[] {

@@ -13,3 +13,7 @@ jest.mock('expo-constants', () => ({
   default: { expoConfig: { extra: {} } },
   ExecutionEnvironment: { Storekit: 'storekit' },
 }));
+
+jest.mock('expo-crypto', () => ({
+  randomUUID: () => Math.random().toString(36).slice(2),
+}));

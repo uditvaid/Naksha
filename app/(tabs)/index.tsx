@@ -1,12 +1,23 @@
 import { useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore, onAppReset } from '@store/userStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getDailyReading } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
-import { PLANETS_BY_ID } from '@constants/astrology';
+import { computeLunarPhase } from '@lib/daily/signals';
+import { DailyShareButton } from '@components/DailyShareButton';
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .trim();
+}
 
 // Module-level cache survives tab unmounts — avoids refetching every time user navigates back.
 // Keyed on (date, userKey) so a profile reset / re-onboard invalidates the previous user's reading.
@@ -22,11 +33,13 @@ function userCacheKey(birthData: { name: string; dateOfBirth: string } | null): 
 onAppReset(() => { _dailyReadingCache = null; });
 
 export default function HomeScreen() {
-  const { birthData, chart, isPremium } = useAppStore(useShallow(s => ({
+  const { birthData, chart, isPremium, aiDisclosureAcknowledged } = useAppStore(useShallow(s => ({
     birthData: s.user.birthData,
     chart: s.user.chart,
     isPremium: s.user.isPremium,
+    aiDisclosureAcknowledged: s.user.aiDisclosureAcknowledged,
   })));
+  const acknowledgeAIDisclosure = useAppStore(s => s.acknowledgeAIDisclosure);
   const initialKey = userCacheKey(birthData);
   const [dailyReading, setDailyReading] = useState(
     _dailyReadingCache?.date === new Date().toDateString() && _dailyReadingCache?.userKey === initialKey
@@ -35,6 +48,15 @@ export default function HomeScreen() {
   );
   const [loadingReading, setLoadingReading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAIDisclosure, setShowAIDisclosure] = useState(false);
+  const [showReadingModal, setShowReadingModal] = useState(false);
+
+  useEffect(() => {
+    if (birthData && !aiDisclosureAcknowledged) {
+      const timer = setTimeout(() => setShowAIDisclosure(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [birthData, aiDisclosureAcknowledged]);
 
   const name = birthData?.name ?? 'Seeker';
   const firstName = name.split(' ')[0] ?? name;
@@ -44,32 +66,31 @@ export default function HomeScreen() {
   const chartDerived = useMemo(() => {
     const planets = chartPlanets ?? [];
     return {
-      planets,
       moon: planets.find(p => p.planet === 'Moon'),
       sun: planets.find(p => p.planet === 'Sun'),
       activeDasha: chartDashas?.find(d => d.isActive),
     };
   }, [chartPlanets, chartDashas]);
-  const { planets, moon, sun, activeDasha } = chartDerived;
+  const { moon, sun, activeDasha } = chartDerived;
 
   const { dateStr, greeting } = useMemo(() => {
     const t = new Date();
     const h = t.getHours();
     return {
       dateStr: t.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
-      greeting: h < 12 ? 'Suprabhat' : h < 17 ? 'Namaskar' : 'Shubh Sandhya',
+      greeting: h < 12 ? 'Suprabhat' : h < 17 ? 'Namaskar' : 'Good Evening',
     };
   }, []);
 
   const fetchDailyReading = useCallback(async (force = false) => {
     if (!birthData) return;
-    if (!isPremium) return; // Daily reading is a premium feature
     const todayKey = new Date().toDateString();
     const key = userCacheKey(birthData);
     if (!force && _dailyReadingCache?.date === todayKey && _dailyReadingCache?.userKey === key) return;
     setLoadingReading(true);
     try {
-      const reading = await getDailyReading(birthData, chart);
+      const raw = await getDailyReading(birthData, chart);
+      const reading = stripMarkdown(raw);
       setDailyReading(reading);
       _dailyReadingCache = { date: todayKey, userKey: key, text: reading };
     } catch (e: any) {
@@ -77,7 +98,7 @@ export default function HomeScreen() {
     } finally {
       setLoadingReading(false);
     }
-  }, [birthData, chart, isPremium]);
+  }, [birthData, chart]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -89,6 +110,58 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Full reading modal */}
+      <Modal visible={showReadingModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowReadingModal(false)}>
+        <SafeAreaView style={styles.modalSheet}>
+          <View style={styles.modalSheetHeader}>
+            <Text style={styles.modalSheetTitle}>Today's Cosmic Reading</Text>
+            <TouchableOpacity onPress={() => setShowReadingModal(false)} style={styles.modalSheetClose}>
+              <Text style={styles.modalSheetCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalSheetActions}>
+            <DailyShareButton
+              reading={dailyReading}
+              lunarPhase={computeLunarPhase(new Date())}
+              mahadasha={activeDasha?.planet ?? 'Sun'}
+              isQuietDay={false}
+            />
+            <TouchableOpacity style={styles.modalSheetRefresh} onPress={() => { setShowReadingModal(false); fetchDailyReading(true); }}>
+              <Text style={styles.modalSheetRefreshText}>↻ Refresh</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalSheetBody} showsVerticalScrollIndicator={false}>
+            <Text style={styles.modalSheetDate}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+            <Text style={styles.modalSheetContent}>{dailyReading}</Text>
+            <View style={{ height: 60 }} />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* One-time AI disclosure modal */}
+      <Modal visible={showAIDisclosure} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>About AI in Naksha</Text>
+            <Text style={styles.modalBody}>
+              Naksha uses <Text style={styles.modalBold}>Claude AI by Anthropic</Text> to generate two types of content:{'\n\n'}
+              <Text style={styles.modalBold}>• Daily cosmic readings</Text> — generated from your birth data and today's date.{'\n'}
+              <Text style={styles.modalBold}>• Guru responses</Text> — generated from your chart and the questions you ask.{'\n\n'}
+              <Text style={styles.modalBold}>Your planetary positions and chart calculations</Text> are computed mathematically using classical Vedic ephemeris — not AI.{'\n\n'}
+              <Text style={styles.modalBold}>What is sent to Anthropic:</Text> your name, birth date, birth place, chart data, and Guru questions.{'\n\n'}
+              <Text style={styles.modalBold}>What is NOT sent:</Text> device identifiers, contacts, photos, or any other personal data.{'\n\n'}
+              The AI draws on classical Vedic texts, Jyotish tradition, and established astrological research — the sources are recognised and valid. Readings are for spiritual reflection only and do not constitute medical, legal, financial, or mental health advice.
+            </Text>
+            <TouchableOpacity
+              style={styles.modalAccept}
+              onPress={() => { acknowledgeAIDisclosure(); setShowAIDisclosure(false); }}
+            >
+              <Text style={styles.modalAcceptText}>Got It ✦</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.gold} />}
@@ -125,62 +198,34 @@ export default function HomeScreen() {
           <StatCard label="Sun Sign" value={sun?.sign ?? '—'} sub={sun?.nakshatra ?? ''} />
         </View>
 
-        {/* Daily Reading — premium-only */}
+        {/* Daily Reading — preview card, tap to expand */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>TODAY'S COSMIC READING</Text>
-          <View style={styles.readingCard}>
-            {!isPremium ? (
-              <>
-                <Text style={styles.readingLocked}>
-                  Your personalised daily cosmic reading — calibrated to your chart and today's planetary energies — is part of Premium.
-                </Text>
-                <TouchableOpacity style={styles.readingUnlockBtn} onPress={() => router.push('/paywall')}>
-                  <Text style={styles.readingUnlockBtnText}>✦ Unlock with Premium</Text>
-                </TouchableOpacity>
-              </>
-            ) : loadingReading ? (
+          <TouchableOpacity
+            style={styles.readingCard}
+            onPress={() => dailyReading && setShowReadingModal(true)}
+            activeOpacity={dailyReading ? 0.75 : 1}
+          >
+            {loadingReading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={Colors.gold} size="small" />
                 <Text style={styles.loadingText}>Reading the stars…</Text>
               </View>
             ) : (
               <>
-                <Text style={styles.readingText}>
-                  {dailyReading || (birthData ? 'Tap refresh to receive your daily cosmic reading.' : 'Complete your birth details to unlock your daily reading.')}
+                <Text style={styles.readingPreview} numberOfLines={3}>
+                  {dailyReading || (birthData ? 'Tap refresh to receive your daily reading.' : 'Complete your birth details to unlock your daily reading.')}
                 </Text>
-                {birthData && (
+                {dailyReading ? (
+                  <Text style={styles.readMoreHint}>Read full reading →</Text>
+                ) : birthData ? (
                   <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchDailyReading(true)}>
-                    <Text style={styles.refreshBtnText}>↻ Refresh Reading</Text>
+                    <Text style={styles.refreshBtnText}>↻ Get Reading</Text>
                   </TouchableOpacity>
-                )}
+                ) : null}
               </>
             )}
-          </View>
-        </View>
-
-        {/* Planet Grid */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>PLANETARY POSITIONS</Text>
-          {planets.map((p) => {
-            const planetData = PLANETS_BY_ID.get(p.planet.toLowerCase());
-            return (
-              <View key={p.planet} style={styles.planetRow}>
-                <View style={[styles.planetDot, { backgroundColor: (planetData?.color ?? Colors.gold) + '33' }]}>
-                  <Text style={[styles.planetSymbol, { color: planetData?.color ?? Colors.gold }]}>
-                    {planetData?.symbol ?? p.planet[0]}
-                  </Text>
-                </View>
-                <View style={styles.planetInfo}>
-                  <Text style={styles.planetName}>{p.planet} {p.isRetrograde ? '℞' : ''}</Text>
-                  <Text style={styles.planetPos}>{p.sign} · House {p.house}</Text>
-                </View>
-                <View style={styles.planetRight}>
-                  <Text style={styles.nakshatra}>{p.nakshatra}</Text>
-                  <Text style={styles.pada}>Pada {p.pada}</Text>
-                </View>
-              </View>
-            );
-          })}
+          </TouchableOpacity>
         </View>
 
         {/* Quick Actions */}
@@ -270,25 +315,32 @@ const styles = StyleSheet.create({
   readingCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 20 },
   loadingText: { color: Colors.muted, fontFamily: Fonts.cormorantItalic, fontSize: 14 },
-  readingText: { fontSize: 15, lineHeight: 24, color: Colors.star, fontFamily: Fonts.crimson },
+  readingPreview: { fontSize: 15, lineHeight: 24, color: Colors.star, fontFamily: Fonts.crimson },
+  readMoreHint: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel, marginTop: 10, alignSelf: 'flex-end' },
   refreshBtn: { marginTop: 12, alignSelf: 'flex-end' },
   refreshBtnText: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel },
-  readingLocked: { fontSize: 15, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 24, marginBottom: 12 },
-  readingUnlockBtn: { alignSelf: 'flex-start', backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.full, paddingHorizontal: 16, paddingVertical: 8 },
-  readingUnlockBtnText: { fontSize: 12, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 1 },
-  planetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 12, marginBottom: 6 },
-  planetDot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  planetSymbol: { fontSize: 16 },
-  planetInfo: { flex: 1 },
-  planetName: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.star },
-  planetPos: { fontSize: 11, color: Colors.muted, marginTop: 1 },
-  planetRight: { alignItems: 'flex-end' },
-  nakshatra: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cormorantItalic },
-  pada: { fontSize: 10, color: Colors.muted, marginTop: 1 },
+  modalSheet: { flex: 1, backgroundColor: Colors.midnight },
+  modalSheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  modalSheetTitle: { fontSize: 16, fontFamily: Fonts.cinzel, color: Colors.gold },
+  modalSheetClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  modalSheetCloseText: { fontSize: 18, color: Colors.muted },
+  modalSheetBody: { flex: 1, padding: Spacing.md },
+  modalSheetDate: { fontSize: 11, letterSpacing: 1.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 16, textTransform: 'uppercase' },
+  modalSheetContent: { fontSize: 16, lineHeight: 28, color: Colors.star, fontFamily: Fonts.crimson },
+  modalSheetActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  modalSheetRefresh: { paddingVertical: Spacing.sm },
+  modalSheetRefreshText: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cinzel },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   quickAction: { width: '30%', aspectRatio: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', gap: 8, position: 'relative' },
   quickIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   quickIcon: { fontSize: 26 },
   quickLabel: { fontSize: 9, fontFamily: Fonts.cinzel, letterSpacing: 0.5, textAlign: 'center' },
   lockBadge: { position: 'absolute', top: 6, right: 8, fontSize: 8, color: Colors.gold },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
+  modalCard: { backgroundColor: '#0D1220', borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.lg, width: '100%', maxWidth: 420 },
+  modalTitle: { fontSize: 18, fontFamily: Fonts.cinzel, color: Colors.gold, textAlign: 'center', marginBottom: Spacing.md },
+  modalBody: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, marginBottom: Spacing.lg },
+  modalBold: { fontFamily: Fonts.cinzelBold, color: Colors.gold },
+  modalAccept: { backgroundColor: Colors.gold, borderRadius: Radius.lg, padding: 16, alignItems: 'center' },
+  modalAcceptText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5 },
 });
