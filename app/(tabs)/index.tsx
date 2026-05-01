@@ -9,6 +9,7 @@ import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { computeLunarPhase } from '@lib/daily/signals';
 import { DailyShareButton } from '@components/DailyShareButton';
 import { useDailyContinuityStore, DailyRecord } from '@store/dailyContinuityStore';
+import { todaysAffirmation, todaysFocus } from '@lib/dailyAffirmation';
 
 function stripMarkdown(text: string): string {
   return text
@@ -95,6 +96,13 @@ export default function HomeScreen() {
     };
   }, [chartPlanets, chartDashas]);
   const { moon, sun, activeDasha } = chartDerived;
+
+  // Same affirmation + focus shown in today's 8am push, surfaced on the home page.
+  const dailyAffirmation = useMemo(() => todaysAffirmation(), []);
+  const dailyFocus = useMemo(
+    () => todaysFocus(activeDasha?.planet),
+    [activeDasha?.planet],
+  );
 
   const { dateStr, greeting, todayLunarPhase } = useMemo(() => {
     const t = new Date();
@@ -244,6 +252,22 @@ export default function HomeScreen() {
           <StatCard label="Sun Sign" value={sun?.sign ?? '—'} sub={sun?.nakshatra ?? ''} />
         </View>
 
+        {/* Daily Affirmation — same content as today's 8am push notification.
+            Always present, no API call required. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>TODAY'S AFFIRMATION</Text>
+          <View style={styles.affirmationCard}>
+            <Text style={styles.affirmationText}>{dailyAffirmation}</Text>
+            <View style={styles.focusDivider} />
+            <Text style={styles.focusHeader}>✦ Top 3 to focus on today</Text>
+            {dailyFocus.map((line, i) => (
+              <Text key={i} style={styles.focusLine}>
+                <Text style={styles.focusNum}>{i + 1}.</Text> {line}
+              </Text>
+            ))}
+          </View>
+        </View>
+
         {/* Daily Reading — preview card, tap to expand */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>TODAY'S COSMIC READING</Text>
@@ -380,6 +404,12 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
   sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 10 },
   readingCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
+  affirmationCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gold + '55', borderRadius: Radius.lg, padding: Spacing.md, gap: 4 },
+  affirmationText: { fontSize: 15, color: Colors.star, fontFamily: Fonts.cormorantItalic, lineHeight: 24, marginBottom: 4 },
+  focusDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.cardBorder, marginVertical: Spacing.sm },
+  focusHeader: { fontSize: 11, letterSpacing: 1.2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 6 },
+  focusLine: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20 },
+  focusNum: { color: Colors.gold, fontFamily: Fonts.cinzel },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 20 },
   loadingText: { color: Colors.muted, fontFamily: Fonts.cormorantItalic, fontSize: 14 },
   readingPreview: { fontSize: 15, lineHeight: 24, color: Colors.star, fontFamily: Fonts.crimson },
