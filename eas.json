@@ -11,7 +11,8 @@
       "distribution": "internal",
       "environment": "production",
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "latest"
       }
     },
     "testflight": {
@@ -20,13 +21,15 @@
         "ENABLE_TEST_MODE": "true"
       },
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "latest"
       }
     },
     "production": {
       "environment": "production",
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "latest"
       }
     }
   },
