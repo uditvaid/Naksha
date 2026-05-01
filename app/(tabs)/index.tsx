@@ -304,6 +304,7 @@ export default function HomeScreen() {
             <QuickAction icon="☯" label="Chinese Chart" color="#F87171" onPress={() => isPremium ? router.push('/features/chinese') : router.push('/paywall')} locked={!isPremium} />
             <QuickAction icon="📖" label="Lal Kitab" color="#34D399" onPress={() => isPremium ? router.push('/features/lalkitab') : router.push('/paywall')} locked={!isPremium} />
             <QuickAction icon="♡" label="Compatibility" color="#FB7185" onPress={() => isPremium ? router.push('/features/compatibility') : router.push('/paywall')} locked={!isPremium} />
+            <QuickAction icon="✦" label="Tarot" color="#C4B5FD" onPress={() => isPremium ? router.push('/features/tarot') : router.push('/paywall')} locked={!isPremium} />
             <QuickAction icon="🔱" label="Ask Guru" color="#E8C96A" onPress={() => router.push('/(tabs)/guru')} locked={false} />
           </View>
         </View>

@@ -487,3 +487,55 @@ Where the Chinese overlay reinforces or contrasts the Vedic reading, weave it in
 Be honest, specific to their charts, and encouraging.`,
   }], 1800);
 }
+
+// ─── Tarot Reading ────────────────────────────────────────────────────────────
+
+import type { DrawnCard, SpreadType } from '@utils/tarot';
+
+export async function getTarotReading(
+  question: string,
+  spread: SpreadType,
+  drawn: DrawnCard[],
+  birthData: BirthData | null,
+  chart: ChartData | null,
+): Promise<string> {
+  const cardsBlock = drawn.map((d, i) => {
+    const orientation = d.reversed ? 'reversed' : 'upright';
+    const meaning = d.reversed ? d.card.reversed : d.card.upright;
+    return `${i + 1}. ${d.position}: ${d.card.name} (${orientation}) — ${meaning}`;
+  }).join('\n');
+
+  const chartContext = (() => {
+    if (!birthData || !chart) return '';
+    const moon = chart.planets?.find(p => p.planet === 'Moon');
+    const sun = chart.planets?.find(p => p.planet === 'Sun');
+    const dasha = chart.dashas?.find(d => d.isActive);
+    return `\nQuerent context (use lightly to personalise — do not let it override the cards):
+- Lagna: ${chart.lagna}
+- Moon sign: ${moon?.sign ?? '—'} (${moon?.nakshatra ?? '—'} nakshatra)
+- Sun sign: ${sun?.sign ?? '—'}
+- Active Mahadasha: ${dasha?.planet ?? '—'}`;
+  })();
+
+  const spreadLabel = spread === 'single' ? 'Single Card draw' : 'Three-Card spread (Past / Present / Future)';
+
+  const system = `You are a thoughtful tarot reader rooted in the Rider-Waite-Smith tradition. You read the cards as they fall — honest, specific, neither doom-laden nor saccharine. You trust the querent to handle truth delivered with care.
+
+When the querent provides chart context, use it lightly: the cards lead, the chart adds texture (e.g. how this lands during a Saturn period vs a Jupiter period). Never let astrology override the actual cards.
+
+Write in plain, warm English. No jargon. No bullet lists in the body — speak in paragraphs that flow.`;
+
+  const user = `${spreadLabel}.
+
+Question: ${question.trim() || '(No specific question — open reading.)'}
+
+Cards drawn:
+${cardsBlock}
+${chartContext}
+
+Read the spread. Begin with one short paragraph of the overall message, then walk through each position naming the card and its meaning in this specific question. End with one grounded, actionable reflection — something the querent can actually do or notice in the next few days. Honour reversed cards as nuance (challenge, internalisation, delay) rather than disasters.
+
+Keep it tight: ~250-400 words total.`;
+
+  return callClaude(system, [{ role: 'user', content: user }], 1200);
+}

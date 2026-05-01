@@ -72,7 +72,7 @@ export interface SavedChart {
 
 export interface SavedReading {
   id: string;
-  type: 'guru' | 'daily' | 'palm' | 'numerology' | 'chinese' | 'lalkitab' | 'compatibility';
+  type: 'guru' | 'daily' | 'palm' | 'numerology' | 'chinese' | 'lalkitab' | 'compatibility' | 'tarot';
   title: string;
   preview: string;       // First ~100 chars for list display
   content: string;       // Full reading content

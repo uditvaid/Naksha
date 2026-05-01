@@ -16,9 +16,10 @@ const TYPE_LABELS: Record<SavedReading['type'], { label: string; icon: string; c
   chinese:       { label: 'Chinese Astrology',icon: '☯',  color: Colors.ruby },
   lalkitab:      { label: 'Lal Kitab',        icon: '📖', color: Colors.emerald },
   compatibility: { label: 'Compatibility',    icon: '♡',  color: Colors.rose },
+  tarot:         { label: 'Tarot',            icon: '✦',  color: '#C4B5FD' },
 };
 
-const TYPE_FILTERS = ['All', 'Guru', 'Daily', 'Palm', 'Numerology', 'Chinese', 'Compatibility', 'Lal Kitab'] as const;
+const TYPE_FILTERS = ['All', 'Guru', 'Daily', 'Palm', 'Numerology', 'Chinese', 'Compatibility', 'Lal Kitab', 'Tarot'] as const;
 type FilterLabel = typeof TYPE_FILTERS[number];
 
 const FILTER_TO_TYPE: Record<FilterLabel, SavedReading['type'] | 'All'> = {
@@ -30,6 +31,7 @@ const FILTER_TO_TYPE: Record<FilterLabel, SavedReading['type'] | 'All'> = {
   'Chinese': 'chinese',
   'Compatibility': 'compatibility',
   'Lal Kitab': 'lalkitab',
+  'Tarot': 'tarot',
 };
 
 export default function SavedReadingsScreen() {
