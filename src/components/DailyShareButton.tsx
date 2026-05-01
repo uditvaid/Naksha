@@ -40,6 +40,8 @@ export function DailyShareButton({ reading, lunarPhase, mahadasha, isQuietDay }:
       if (result.action === Share.sharedAction) {
         recordEvent('shared', { isQuietDay: isQuietDay ?? false });
       }
+    } catch {
+      // Share sheet dismissed or system error — never surface to user
     } finally {
       setSharing(false);
     }

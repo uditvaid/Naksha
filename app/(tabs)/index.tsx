@@ -73,12 +73,13 @@ export default function HomeScreen() {
   }, [chartPlanets, chartDashas]);
   const { moon, sun, activeDasha } = chartDerived;
 
-  const { dateStr, greeting } = useMemo(() => {
+  const { dateStr, greeting, todayLunarPhase } = useMemo(() => {
     const t = new Date();
     const h = t.getHours();
     return {
       dateStr: t.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
       greeting: h < 12 ? 'Suprabhat' : h < 17 ? 'Namaskar' : 'Good Evening',
+      todayLunarPhase: computeLunarPhase(t),
     };
   }, []);
 
@@ -122,7 +123,7 @@ export default function HomeScreen() {
           <View style={styles.modalSheetActions}>
             <DailyShareButton
               reading={dailyReading}
-              lunarPhase={computeLunarPhase(new Date())}
+              lunarPhase={todayLunarPhase}
               mahadasha={activeDasha?.planet ?? 'Sun'}
               isQuietDay={false}
             />
@@ -131,7 +132,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalSheetBody} showsVerticalScrollIndicator={false}>
-            <Text style={styles.modalSheetDate}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+            <Text style={styles.modalSheetDate}>{dateStr}</Text>
             <Text style={styles.modalSheetContent}>{dailyReading}</Text>
             <View style={{ height: 60 }} />
           </ScrollView>
