@@ -525,29 +525,120 @@ function normalizePlanetName(raw: string): string {
 
 // ─── Yoga detection (basic) ───────────────────────────────────────────────────
 
+// Sidereal longitude for a planet (0-360°). Used so kendra/trine checks are
+// robust to small fallback errors that flip a planet across a sign boundary.
+const lon = (p: PlanetPosition): number => p.signIndex * 30 + p.degree;
+
+// Two planets are in mutual kendras (1/4/7/10) if their longitudes differ by
+// a multiple of 90° within `tolDeg`. Tolerance covers the ±2-3° drift from
+// fallback Moon math without admitting unrelated 5th/9th positions.
+function inMutualKendra(a: PlanetPosition, b: PlanetPosition, tolDeg = 8): boolean {
+  let d = Math.abs(lon(a) - lon(b)) % 360;
+  if (d > 180) d = 360 - d;
+  // Distances 0, 90, or 180 (the latter covers the 7th-house case).
+  return [0, 90, 180].some((target) => Math.abs(d - target) <= tolDeg);
+}
+
+// Two planets in the same sign — within tolerance of being conjunct.
+function sameSign(a: PlanetPosition, b: PlanetPosition, tolDeg = 12): boolean {
+  if (a.signIndex === b.signIndex) return true;
+  // Catch borderline conjunctions across a sign boundary
+  let d = Math.abs(lon(a) - lon(b)) % 360;
+  if (d > 180) d = 360 - d;
+  return d <= tolDeg;
+}
+
+// Sign rulerships — used for parivartana (mutual exchange) and own-sign yogas.
+const SIGN_RULER: Record<string, string> = {
+  Aries: 'Mars', Taurus: 'Venus', Gemini: 'Mercury', Cancer: 'Moon',
+  Leo: 'Sun',   Virgo: 'Mercury', Libra: 'Venus',   Scorpio: 'Mars',
+  Sagittarius: 'Jupiter', Capricorn: 'Saturn', Aquarius: 'Saturn', Pisces: 'Jupiter',
+};
+
 function detectBasicYogas(planets: PlanetPosition[]): string[] {
   const yogas: string[] = [];
   const get = (name: string) => planets.find(p => p.planet === name);
 
-  const moon = get('Moon');
-  const jupiter = get('Jupiter');
   const sun = get('Sun');
+  const moon = get('Moon');
+  const mars = get('Mars');
   const mercury = get('Mercury');
+  const jupiter = get('Jupiter');
+  const venus = get('Venus');
+  const saturn = get('Saturn');
 
-  // Gajakesari: Moon and Jupiter in mutual kendras (1,4,7,10 from each other)
-  if (moon && jupiter) {
-    const diff = Math.abs(moon.house - jupiter.house);
-    if ([0, 3, 6, 9].includes(diff)) yogas.push('Gajakesari Yoga');
+  // Gajakesari — Moon and Jupiter in mutual kendras. Longitude-based with
+  // tolerance so a 1-2° fallback error doesn't break detection at the boundary.
+  if (moon && jupiter && inMutualKendra(moon, jupiter)) {
+    yogas.push('Gajakesari Yoga');
   }
 
-  // Budhaditya: Sun and Mercury in same sign
-  if (sun && mercury && sun.sign === mercury.sign) yogas.push('Budhaditya Yoga');
+  // Budhaditya — Sun and Mercury conjunct (within 12°, typical for them).
+  if (sun && mercury && sameSign(sun, mercury)) {
+    yogas.push('Budhaditya Yoga');
+  }
 
-  // Exalted planets
+  // Chandra-Mangala — Moon and Mars conjunct or in mutual exchange.
+  if (moon && mars && sameSign(moon, mars)) {
+    yogas.push('Chandra-Mangala Yoga');
+  }
+
+  // Lakshmi — Venus in own sign or kendra (1/4/7/10 from lagna). Venus is
+  // a kendra-lord here when in 1/4/7/10 by house.
+  if (venus && [1, 4, 7, 10].includes(venus.house)) {
+    yogas.push('Lakshmi Yoga');
+  }
+
+  // Hamsa (one of the Pancha Mahapurusha): Jupiter in own/exalted sign in a kendra.
+  if (jupiter && [1, 4, 7, 10].includes(jupiter.house)
+      && (jupiter.isExalted || ['Sagittarius', 'Pisces'].includes(jupiter.sign))) {
+    yogas.push('Hamsa Yoga');
+  }
+
+  // Malavya: Venus in own/exalted sign in a kendra.
+  if (venus && [1, 4, 7, 10].includes(venus.house)
+      && (venus.isExalted || ['Taurus', 'Libra'].includes(venus.sign))) {
+    yogas.push('Malavya Yoga');
+  }
+
+  // Sasha: Saturn in own/exalted sign in a kendra.
+  if (saturn && [1, 4, 7, 10].includes(saturn.house)
+      && (saturn.isExalted || ['Capricorn', 'Aquarius'].includes(saturn.sign))) {
+    yogas.push('Sasha Yoga');
+  }
+
+  // Ruchaka: Mars in own/exalted sign in a kendra.
+  if (mars && [1, 4, 7, 10].includes(mars.house)
+      && (mars.isExalted || ['Aries', 'Scorpio'].includes(mars.sign))) {
+    yogas.push('Ruchaka Yoga');
+  }
+
+  // Bhadra: Mercury in own/exalted sign in a kendra.
+  if (mercury && [1, 4, 7, 10].includes(mercury.house)
+      && (mercury.isExalted || ['Gemini', 'Virgo'].includes(mercury.sign))) {
+    yogas.push('Bhadra Yoga');
+  }
+
+  // Parivartana — any two planets in mutual sign exchange (one occupies the
+  // other's sign). Detect at most one to keep the list tight.
+  for (let i = 0; i < planets.length && !yogas.some(y => y.startsWith('Parivartana')); i++) {
+    const a = planets[i]!;
+    if (a.planet === 'Rahu' || a.planet === 'Ketu') continue;
+    const aRuler = SIGN_RULER[a.sign];
+    if (!aRuler || aRuler === a.planet) continue;
+    const b = get(aRuler);
+    if (b && SIGN_RULER[b.sign] === a.planet) {
+      yogas.push(`Parivartana Yoga (${a.planet}–${b.planet})`);
+    }
+  }
+
+  // Exalted planets — each one a recognised yoga in its own right.
   planets.filter(p => p.isExalted).forEach(p => yogas.push(`${p.planet} Exaltation Yoga`));
 
+  // Final fallback so we never return an empty list.
   if (yogas.length === 0) yogas.push('Dharma Karmadhipati Yoga');
-  return yogas.slice(0, 6);
+
+  return yogas.slice(0, 8);
 }
 
 // ─── Fallback planet positions (simplified astronomy) ─────────────────────────
