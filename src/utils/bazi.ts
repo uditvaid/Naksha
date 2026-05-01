@@ -324,3 +324,121 @@ export const ELEMENT_BALANCE_TIPS: Record<string, { deficient: string; excess: s
   Metal: { deficient: 'Organise your space, wear white or silver, face West, practice precision in at least one area of life.', excess: 'Soften with Water (flow, rest), nourish with Earth (stability), avoid excessive self-criticism.' },
   Water: { deficient: 'Rest more, spend time near water, wear black or dark blue, face North, practice stillness.', excess: 'Ground with Earth, take action (Wood/Fire), avoid overthinking and excessive withdrawal.' },
 };
+
+// ─── Compatibility (between two people) ───────────────────────────────────────
+
+// 5-element generating cycle: A produces / nurtures B
+const ELEMENT_GENERATES: Record<string, string> = {
+  Wood: 'Fire', Fire: 'Earth', Earth: 'Metal', Metal: 'Water', Water: 'Wood',
+};
+
+// 5-element controlling cycle: A controls / restrains B
+const ELEMENT_CONTROLS: Record<string, string> = {
+  Wood: 'Earth', Earth: 'Water', Water: 'Fire', Fire: 'Metal', Metal: 'Wood',
+};
+
+export type ZodiacLevel = 'best' | 'good' | 'neutral' | 'challenging';
+export type ElementInterplay =
+  | 'mirroring'   // same element
+  | 'nurturing'   // your element generates partner's
+  | 'received'    // partner's element generates yours
+  | 'controlling' // your element controls partner's
+  | 'controlled'  // partner's element controls yours
+  | 'neutral';
+
+const INTERPLAY_DESCRIPTIONS: Record<ElementInterplay, string> = {
+  mirroring:   'You mirror each other deeply — instant ease, but watch for stagnation when neither pushes the other to grow.',
+  nurturing:   'You naturally nurture and support them. Your steady presence helps them flourish.',
+  received:    'They naturally nurture and support you. Their presence helps you flourish.',
+  controlling: 'You bring shape and direction to their world — productive when they welcome it, friction when they don\'t.',
+  controlled:  'They bring shape and direction to yours — productive when you welcome it, friction when you don\'t.',
+  neutral:     'A polite, balanced dynamic — neither destabilizing nor especially energising. Friendship more than fire.',
+};
+
+export interface ChineseCompatibility {
+  yourZodiac: string;
+  yourZodiacChar: string;
+  yourDayMaster: string;
+  yourDayMasterChar: string;
+  yourDayElement: string;
+  partnerZodiac: string;
+  partnerZodiacChar: string;
+  partnerDayMaster: string;
+  partnerDayMasterChar: string;
+  partnerDayElement: string;
+  zodiacLevel: ZodiacLevel;
+  elementInterplay: ElementInterplay;
+  elementInterplayDescription: string;
+  summary: string;
+}
+
+function classifyZodiacMatch(yours: string, partners: string): ZodiacLevel {
+  if (yours === partners) {
+    // Same animal: usually steady but can lack spark
+    return 'neutral';
+  }
+  const compat = BAZI_COMPATIBILITY[yours];
+  if (!compat) return 'neutral';
+  if (compat.best.includes(partners)) return 'best';
+  if (compat.challenging.includes(partners)) return 'challenging';
+  return 'good';
+}
+
+function classifyElementInterplay(a: string, b: string): ElementInterplay {
+  if (a === b) return 'mirroring';
+  if (ELEMENT_GENERATES[a] === b) return 'nurturing';
+  if (ELEMENT_GENERATES[b] === a) return 'received';
+  if (ELEMENT_CONTROLS[a] === b) return 'controlling';
+  if (ELEMENT_CONTROLS[b] === a) return 'controlled';
+  return 'neutral';
+}
+
+const ZODIAC_SUMMARIES: Record<ZodiacLevel, string> = {
+  best:        'A naturally harmonious match — your animals are in one of the classic supportive triads.',
+  good:        'A workable match — no inherent friction, room to build something solid.',
+  neutral:     'You share the same animal — comfort and understanding, but you may need to seek growth elsewhere.',
+  challenging: 'A traditionally tense pairing — meaningful relationships happen here, but require more conscious work.',
+};
+
+/**
+ * Computes Chinese / BaZi compatibility between two people from their birth dates.
+ * Pure function — no network, no I/O. Uses year branch (zodiac animal) for the
+ * social-level match and the day master (day stem) for the deeper element interplay.
+ *
+ * dateOfBirth strings are expected in 'YYYY-MM-DD' form.
+ */
+export function getChineseCompatibility(
+  yourDOB: string,
+  partnerDOB: string,
+): ChineseCompatibility {
+  const yourYear = new Date(yourDOB + 'T12:00:00Z').getUTCFullYear();
+  const partnerYear = new Date(partnerDOB + 'T12:00:00Z').getUTCFullYear();
+
+  const yourYearPillar = getYearPillar(yourYear);
+  const partnerYearPillar = getYearPillar(partnerYear);
+  const yourDayPillar = getDayPillar(yourDOB);
+  const partnerDayPillar = getDayPillar(partnerDOB);
+
+  const zodiacLevel = classifyZodiacMatch(yourYearPillar.branch, partnerYearPillar.branch);
+  const elementInterplay = classifyElementInterplay(
+    yourDayPillar.stemElement,
+    partnerDayPillar.stemElement,
+  );
+
+  return {
+    yourZodiac: yourYearPillar.branch,
+    yourZodiacChar: yourYearPillar.branchChar,
+    yourDayMaster: yourDayPillar.stem,
+    yourDayMasterChar: yourDayPillar.stemChar,
+    yourDayElement: yourDayPillar.stemElement,
+    partnerZodiac: partnerYearPillar.branch,
+    partnerZodiacChar: partnerYearPillar.branchChar,
+    partnerDayMaster: partnerDayPillar.stem,
+    partnerDayMasterChar: partnerDayPillar.stemChar,
+    partnerDayElement: partnerDayPillar.stemElement,
+    zodiacLevel,
+    elementInterplay,
+    elementInterplayDescription: INTERPLAY_DESCRIPTIONS[elementInterplay],
+    summary: ZODIAC_SUMMARIES[zodiacLevel],
+  };
+}

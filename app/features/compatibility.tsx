@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Alert, Platform, KeyboardAvoidingView,
@@ -10,7 +10,26 @@ import { useAppStore } from '@store/userStore';
 import { getCompatibilityReading } from '@services/claude';
 import { geocodePlace, generateChart, PlaceNotFoundError } from '@services/prokerala';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
+import { getChineseCompatibility, ELEMENT_DATA, type ZodiacLevel } from '@utils/bazi';
 import type { BirthData, ChartData } from '@store/userStore';
+
+function chineseLevelGlyph(level: ZodiacLevel): string {
+  switch (level) {
+    case 'best':        return '✦';
+    case 'good':        return '◇';
+    case 'neutral':     return '◯';
+    case 'challenging': return '⚡';
+  }
+}
+
+function chineseLevelLabel(level: ZodiacLevel): string {
+  switch (level) {
+    case 'best':        return 'Strong Natural Match';
+    case 'good':        return 'Workable Match';
+    case 'neutral':     return 'Familiar Ground';
+    case 'challenging': return 'Conscious Work Required';
+  }
+}
 
 const PLACE_PART_RE = /^[\p{L}\s\.\-']+$/u;
 type PlaceValidation = { ok: true } | { ok: false; message: string };
@@ -59,6 +78,23 @@ export default function CompatibilityScreen() {
   const [score, setScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [partnerChartFailed, setPartnerChartFailed] = useState(false);
+
+  // Local Chinese / BaZi match — instantly computed once partner DOB is confirmed.
+  // No API call; deterministic from year branch + day stem of both DOBs.
+  const chineseMatch = useMemo(() => {
+    if (!user.birthData?.dateOfBirth || !dateConfirmed) return null;
+    const partnerISO = (() => {
+      const y = partnerDate.getUTCFullYear();
+      const m = String(partnerDate.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(partnerDate.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    })();
+    try {
+      return getChineseCompatibility(user.birthData.dateOfBirth, partnerISO);
+    } catch {
+      return null;
+    }
+  }, [user.birthData?.dateOfBirth, dateConfirmed, partnerDate]);
 
   if (!user.isPremium) {
     return (
@@ -367,6 +403,34 @@ export default function CompatibilityScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Chinese / BaZi match — appears once partner DOB is confirmed.
+              Pure local compute; complements the Vedic reading below. */}
+          {chineseMatch && (
+            <View style={[styles.chineseCard, styles[`chinese_${chineseMatch.zodiacLevel}` as const]]}>
+              <Text style={styles.chineseLabel}>CHINESE ASTROLOGY MATCH</Text>
+              <View style={styles.chineseZodiacRow}>
+                <View style={styles.chineseZodiacBox}>
+                  <Text style={styles.chineseZodiacChar}>{chineseMatch.yourZodiacChar}</Text>
+                  <Text style={styles.chineseZodiacName}>{chineseMatch.yourZodiac}</Text>
+                  <Text style={[styles.chineseElementBadge, { color: ELEMENT_DATA[chineseMatch.yourDayElement]?.color ?? Colors.gold }]}>
+                    {ELEMENT_DATA[chineseMatch.yourDayElement]?.symbol ?? ''} {chineseMatch.yourDayElement}
+                  </Text>
+                </View>
+                <Text style={styles.chineseConnector}>{chineseLevelGlyph(chineseMatch.zodiacLevel)}</Text>
+                <View style={styles.chineseZodiacBox}>
+                  <Text style={styles.chineseZodiacChar}>{chineseMatch.partnerZodiacChar}</Text>
+                  <Text style={styles.chineseZodiacName}>{chineseMatch.partnerZodiac}</Text>
+                  <Text style={[styles.chineseElementBadge, { color: ELEMENT_DATA[chineseMatch.partnerDayElement]?.color ?? Colors.gold }]}>
+                    {ELEMENT_DATA[chineseMatch.partnerDayElement]?.symbol ?? ''} {chineseMatch.partnerDayElement}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.chineseLevel}>{chineseLevelLabel(chineseMatch.zodiacLevel)}</Text>
+              <Text style={styles.chineseSummary}>{chineseMatch.summary}</Text>
+              <Text style={styles.chineseInterplay}>{chineseMatch.elementInterplayDescription}</Text>
+            </View>
+          )}
+
           {/* Score display */}
           {reading !== '' && score === null && (
             <View style={styles.scoreSection}>
@@ -503,6 +567,32 @@ const styles = StyleSheet.create({
   scoreTotal: { fontSize: 20, fontFamily: Fonts.cinzel, color: Colors.muted, marginLeft: 2 },
   scoreLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 6 },
   scoreDesc: { fontSize: 13, color: Colors.star, fontFamily: Fonts.cormorantItalic, textAlign: 'center' },
+
+  // Chinese match card
+  chineseCard: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.md,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    borderRadius: Radius.xl,
+    padding: Spacing.md,
+  },
+  chinese_best:        { borderColor: Colors.gold },
+  chinese_good:        { borderColor: Colors.cardBorder },
+  chinese_neutral:     { borderColor: Colors.mutedDark },
+  chinese_challenging: { borderColor: Colors.amber },
+  chineseLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 12, textAlign: 'center' },
+  chineseZodiacRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  chineseZodiacBox: { flex: 1, alignItems: 'center', gap: 4 },
+  chineseZodiacChar: { fontSize: 36, color: Colors.gold, fontFamily: Fonts.cinzel },
+  chineseZodiacName: { fontSize: 13, color: Colors.star, fontFamily: Fonts.cinzel, letterSpacing: 1 },
+  chineseElementBadge: { fontSize: 11, fontFamily: Fonts.crimson, marginTop: 2 },
+  chineseConnector: { fontSize: 22, color: Colors.gold, paddingHorizontal: Spacing.md },
+  chineseLevel: { fontSize: 12, letterSpacing: 1.5, color: Colors.gold, fontFamily: Fonts.cinzel, textAlign: 'center', marginBottom: 8 },
+  chineseSummary: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20, textAlign: 'center', marginBottom: 6 },
+  chineseInterplay: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, lineHeight: 18, textAlign: 'center' },
 
   // Reading
   readingSection: { marginHorizontal: Spacing.md, marginBottom: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.md },

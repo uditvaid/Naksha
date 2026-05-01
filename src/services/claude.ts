@@ -19,6 +19,7 @@ import { useGuruMemoryStore } from '@store/guruMemoryStore';
 import { useGuruTelemetryStore } from '@store/guruTelemetryStore';
 import { tickExchangeCounter, extractArcSignals } from './arcExtractor';
 import { extractMemorySignals } from './memoryExtractor';
+import { getChineseCompatibility } from '@utils/bazi';
 import { assembleGuruSystemPrompt, assembleDefaultGuruPrompt } from '@lib/persona/promptAssembler';
 import { classifyUserMessage, analyzeResponse } from '@lib/persona/guardrails';
 import { selectResponseForm, RhythmContext } from '@lib/persona/rhythm';
@@ -432,7 +433,23 @@ Active Dasha: ${chart.dashas?.find(d => d.isActive)?.planet ?? 'Unknown'}
 Yogas: ${chart.yogas?.join(', ') || 'Standard placements'}`;
   };
 
-  const system = `You are a warm, insightful guide helping people understand their relationships through Vedic compatibility analysis (Ashtakoota Milan).
+  // Compute the BaZi / Chinese astrology overlay locally — pure function, deterministic.
+  // We pass the result into the prompt so the LLM can weave both traditions in one reading
+  // instead of bolting Chinese on as a separate paragraph.
+  let chineseBlock = '';
+  try {
+    const ch = getChineseCompatibility(person1.birthData.dateOfBirth, person2.birthData.dateOfBirth);
+    chineseBlock = `═══ Chinese / BaZi overlay (precomputed) ═══
+${person1.birthData.name}: Year zodiac ${ch.yourZodiac} (${ch.yourZodiacChar}) · Day Master ${ch.yourDayMaster} · Day-element ${ch.yourDayElement}
+${person2.birthData.name}: Year zodiac ${ch.partnerZodiac} (${ch.partnerZodiacChar}) · Day Master ${ch.partnerDayMaster} · Day-element ${ch.partnerDayElement}
+Zodiac match level: ${ch.zodiacLevel}
+Day-element interplay: ${ch.elementInterplay} — ${ch.elementInterplayDescription}
+`;
+  } catch {
+    // No Chinese block if dates can't be parsed — Vedic reading still proceeds.
+  }
+
+  const system = `You are a warm, insightful guide helping people understand their relationships through both Vedic (Ashtakoota Milan) and Chinese (BaZi) astrological analysis.
 
 IMPORTANT: You MUST begin your response with the Ashtakoota compatibility score on its own line in this exact format:
 SCORE: X/36
@@ -451,7 +468,7 @@ Be as accurate as possible based on the Moon Nakshatra positions. After the scor
 
   return callClaude(system, [{
     role: 'user',
-    content: `Analyze the Vedic compatibility between these two people using Ashtakoota Milan.
+    content: `Analyze the compatibility between these two people. Lead with Vedic (Ashtakoota Milan) and weave in the precomputed Chinese (BaZi) overlay where it adds insight — don't treat them as separate readings.
 
 ═══ Person 1 ═══
 ${person1.birthData.name}
@@ -460,10 +477,12 @@ ${getChartSummary(person1.birthData, person1.chart)}
 ═══ Person 2 ═══
 ${person2.birthData.name}
 ${getChartSummary(person2.birthData, person2.chart)}
-
+${chineseBlock ? '\n' + chineseBlock : ''}
 Start with the SCORE: X/36 line, then provide a brief breakdown of how they scored on each of the 8 Kootas (one line each, in plain English — what each means for their relationship).
 
 Then cover: what naturally draws these two together; their deepest compatibility strengths; areas that will need patience and understanding; how their current life phases (Mahadasha periods) affect the relationship right now; and practical advice for building a strong relationship together.
+
+Where the Chinese overlay reinforces or contrasts the Vedic reading, weave it in — for example, mention if the year zodiacs sit in a classic supportive triad or if the day-master elements are in a generating/controlling cycle. Use this to enrich the reading, never to contradict the Vedic core.
 
 Be honest, specific to their charts, and encouraging.`,
   }], 1800);
