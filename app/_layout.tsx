@@ -106,6 +106,7 @@ export default function RootLayout() {
         <Stack.Screen name="features/chinese" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="features/lalkitab" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="features/compatibility" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="features/tarot" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="features/savedreadings" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="legal/privacy" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="legal/terms" options={{ animation: 'slide_from_right' }} />
