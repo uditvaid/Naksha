@@ -8,6 +8,7 @@ import { getDailyReading } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { computeLunarPhase } from '@lib/daily/signals';
 import { DailyShareButton } from '@components/DailyShareButton';
+import { useDailyContinuityStore, DailyRecord } from '@store/dailyContinuityStore';
 
 function stripMarkdown(text: string): string {
   return text
@@ -26,6 +27,19 @@ let _dailyReadingCache: { date: string; userKey: string; text: string } | null =
 function userCacheKey(birthData: { name: string; dateOfBirth: string } | null): string {
   if (!birthData) return '';
   return `${birthData.name}|${birthData.dateOfBirth}`;
+}
+
+// "2026-04-30" → "Apr 30" (compact list label) or "Yesterday" / "Today"
+function formatArchiveDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const recordDate = new Date(y, m - 1, d);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((today.getTime() - recordDate.getTime()) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return recordDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 // Clear the module-level cache when the user resets/logs out so a re-onboarded user
@@ -50,6 +64,15 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAIDisclosure, setShowAIDisclosure] = useState(false);
   const [showReadingModal, setShowReadingModal] = useState(false);
+  // When set, the modal renders this past record instead of today's reading.
+  const [archivedRecord, setArchivedRecord] = useState<DailyRecord | null>(null);
+
+  const addDaily = useDailyContinuityStore(s => s.addDaily);
+  const dailyRecords = useDailyContinuityStore(s => s.dailyRecords);
+  const recentRecords = useMemo(() => {
+    const todayIso = new Date().toISOString().split('T')[0]!;
+    return dailyRecords.filter(r => r.date !== todayIso).slice(0, 7);
+  }, [dailyRecords]);
 
   useEffect(() => {
     if (birthData && !aiDisclosureAcknowledged) {
@@ -94,12 +117,32 @@ export default function HomeScreen() {
       const reading = stripMarkdown(raw);
       setDailyReading(reading);
       _dailyReadingCache = { date: todayKey, userKey: key, text: reading };
+
+      // Persist to history — dedupe so refresh doesn't pile up records for the same day.
+      const isoDate = new Date().toISOString().split('T')[0]!;
+      const alreadyToday = useDailyContinuityStore.getState().dailyRecords.some(d => d.date === isoDate);
+      if (!alreadyToday) {
+        const dasha = chart?.dashas?.find(d => d.isActive)?.planet ?? 'Sun';
+        addDaily({
+          date: isoDate,
+          notification: reading.slice(0, 100),
+          card: reading.slice(0, 280),
+          expanded: reading,
+          tone: 'reflective',
+          lunarPhase: computeLunarPhase(new Date()),
+          mahadasha: dasha,
+          antardasha: null,
+          isQuietDay: false,
+          isDeepDay: false,
+          hasCallback: false,
+        });
+      }
     } catch (e: any) {
       setDailyReading(`Unable to get reading: ${e?.message ?? 'Please try again shortly.'}`);
     } finally {
       setLoadingReading(false);
     }
-  }, [birthData, chart]);
+  }, [birthData, chart, addDaily]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -112,28 +155,30 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Full reading modal */}
-      <Modal visible={showReadingModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowReadingModal(false)}>
+      <Modal visible={showReadingModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setShowReadingModal(false); setArchivedRecord(null); }}>
         <SafeAreaView style={styles.modalSheet}>
           <View style={styles.modalSheetHeader}>
-            <Text style={styles.modalSheetTitle}>Today's Cosmic Reading</Text>
-            <TouchableOpacity onPress={() => setShowReadingModal(false)} style={styles.modalSheetClose}>
+            <Text style={styles.modalSheetTitle}>{archivedRecord ? 'Reading from ' + formatArchiveDate(archivedRecord.date) : "Today's Cosmic Reading"}</Text>
+            <TouchableOpacity onPress={() => { setShowReadingModal(false); setArchivedRecord(null); }} style={styles.modalSheetClose}>
               <Text style={styles.modalSheetCloseText}>✕</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.modalSheetActions}>
             <DailyShareButton
-              reading={dailyReading}
-              lunarPhase={todayLunarPhase}
-              mahadasha={activeDasha?.planet ?? 'Sun'}
-              isQuietDay={false}
+              reading={archivedRecord?.expanded ?? dailyReading}
+              lunarPhase={(archivedRecord?.lunarPhase as any) ?? todayLunarPhase}
+              mahadasha={archivedRecord?.mahadasha ?? activeDasha?.planet ?? 'Sun'}
+              isQuietDay={archivedRecord?.isQuietDay ?? false}
             />
-            <TouchableOpacity style={styles.modalSheetRefresh} onPress={() => { setShowReadingModal(false); fetchDailyReading(true); }}>
-              <Text style={styles.modalSheetRefreshText}>↻ Refresh</Text>
-            </TouchableOpacity>
+            {!archivedRecord && (
+              <TouchableOpacity style={styles.modalSheetRefresh} onPress={() => { setShowReadingModal(false); fetchDailyReading(true); }}>
+                <Text style={styles.modalSheetRefreshText}>↻ Refresh</Text>
+              </TouchableOpacity>
+            )}
           </View>
           <ScrollView style={styles.modalSheetBody} showsVerticalScrollIndicator={false}>
-            <Text style={styles.modalSheetDate}>{dateStr}</Text>
-            <Text style={styles.modalSheetContent}>{dailyReading}</Text>
+            <Text style={styles.modalSheetDate}>{archivedRecord ? formatArchiveDate(archivedRecord.date) : dateStr}</Text>
+            <Text style={styles.modalSheetContent}>{archivedRecord?.expanded ?? dailyReading}</Text>
             <View style={{ height: 60 }} />
           </ScrollView>
         </SafeAreaView>
@@ -204,7 +249,7 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>TODAY'S COSMIC READING</Text>
           <TouchableOpacity
             style={styles.readingCard}
-            onPress={() => dailyReading && setShowReadingModal(true)}
+            onPress={() => { if (dailyReading) { setArchivedRecord(null); setShowReadingModal(true); } }}
             activeOpacity={dailyReading ? 0.75 : 1}
           >
             {loadingReading ? (
@@ -228,6 +273,27 @@ export default function HomeScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Recent Readings — past entries, tap to re-read */}
+        {recentRecords.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>RECENT READINGS</Text>
+            {recentRecords.map((rec) => (
+              <TouchableOpacity
+                key={rec.id}
+                style={styles.archiveItem}
+                onPress={() => { setArchivedRecord(rec); setShowReadingModal(true); }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.archiveRow}>
+                  <Text style={styles.archiveDate}>{formatArchiveDate(rec.date)}</Text>
+                  <Text style={styles.archiveDasha}>{rec.mahadasha}</Text>
+                </View>
+                <Text style={styles.archivePreview} numberOfLines={2}>{rec.notification || rec.card}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Quick Actions */}
         <View style={styles.section}>
@@ -318,6 +384,11 @@ const styles = StyleSheet.create({
   loadingText: { color: Colors.muted, fontFamily: Fonts.cormorantItalic, fontSize: 14 },
   readingPreview: { fontSize: 15, lineHeight: 24, color: Colors.star, fontFamily: Fonts.crimson },
   readMoreHint: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel, marginTop: 10, alignSelf: 'flex-end' },
+  archiveItem: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 12, marginBottom: 8 },
+  archiveRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 },
+  archiveDate: { fontSize: 11, letterSpacing: 1.5, color: Colors.muted, fontFamily: Fonts.cinzel, textTransform: 'uppercase' },
+  archiveDasha: { fontSize: 10, letterSpacing: 1, color: Colors.gold, fontFamily: Fonts.cinzel },
+  archivePreview: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 19 },
   refreshBtn: { marginTop: 12, alignSelf: 'flex-end' },
   refreshBtnText: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel },
   modalSheet: { flex: 1, backgroundColor: Colors.midnight },
