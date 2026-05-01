@@ -66,16 +66,6 @@ const FEATURES = [
     premium: true,
     color: '#C4B5FD',
   },
-  {
-    id: 'guru',
-    icon: '🔱',
-    title: 'Guru',
-    subtitle: 'AI-Powered Guidance',
-    desc: 'Ask anything — your personal Vedic guide answers based on your chart',
-    route: '/(tabs)/guru',
-    premium: false,
-    color: '#10B981',
-  },
 ];
 
 interface LearnItem {
