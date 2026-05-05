@@ -267,8 +267,16 @@ function parsePlanetPosition(planet: any, lagnaSignIndex: number): PlanetPositio
   let signIndex: number;
   let degree: number;
 
-  if (planet.longitude && typeof planet.longitude === 'object' && 'degrees' in planet.longitude) {
-    // Prokerala planet-position API shape:
+  if (typeof planet.longitude === 'number') {
+    // Prokerala v2 planet-position API: longitude is the absolute sidereal
+    // longitude (0–360°). Source of truth — derive signIndex from it directly
+    // rather than trusting rasi.id, which is 0-indexed in v2 but was
+    // 1-indexed in earlier versions and would silently shift every planet
+    // by one sign if we got the indexing wrong.
+    signIndex = Math.floor(planet.longitude / 30) % 12;
+    degree = planet.longitude - signIndex * 30;
+  } else if (planet.longitude && typeof planet.longitude === 'object' && 'degrees' in planet.longitude) {
+    // Older Prokerala planet-position API shape:
     //   sign.id  = 1-indexed zodiac sign
     //   longitude = within-sign { degrees, minutes, seconds }
     signIndex = (planet.sign?.id ?? 1) - 1;

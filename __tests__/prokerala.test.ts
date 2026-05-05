@@ -318,6 +318,82 @@ describe('generateChart — approximate mode Moon accuracy (all fetches fail)', 
   });
 });
 
+// ─── Suite 2c: Prokerala v2 API shape (regression for off-by-one sign bug) ───
+// The v2 API switched to absolute longitude (number) + 0-indexed rasi.id,
+// where the previous shape used DMS object + 1-indexed sign.id. The parser
+// must derive signIndex from longitude when it's a number — trusting rasi.id
+// would shift every planet by one sign.
+
+function buildV2PlanetPayload() {
+  // Real Prokerala v2 response shape (verified against production API).
+  // longitude is an absolute float; rasi.id is 0-indexed (Vrishabha = 1).
+  // Same astronomical data as buildFakePlanetPayload, just the v2 wire format.
+  return {
+    planet_position: [
+      { name: 'Sun',     longitude: 50.0760,  degree: 20.0760, rasi: { id: 1 }, is_retrograde: false, is_exalted: false, is_debilitated: false },
+      { name: 'Moon',    longitude: 58.2843,  degree: 28.2843, rasi: { id: 1 }, is_retrograde: false, is_exalted: false, is_debilitated: false },
+      { name: 'Mars',    longitude: 88.7390,  degree: 28.7390, rasi: { id: 2 }, is_retrograde: false, is_exalted: false, is_debilitated: false },
+      { name: 'Mercury', longitude: 34.4760,  degree:  4.4760, rasi: { id: 1 }, is_retrograde: true,  is_exalted: false, is_debilitated: false },
+      { name: 'Jupiter', longitude: 53.6520,  degree: 23.6520, rasi: { id: 1 }, is_retrograde: false, is_exalted: false, is_debilitated: false },
+      { name: 'Venus',   longitude: 65.9520,  degree:  5.9520, rasi: { id: 2 }, is_retrograde: false, is_exalted: false, is_debilitated: false },
+      { name: 'Saturn',  longitude: 258.8520, degree: 18.8520, rasi: { id: 8 }, is_retrograde: true,  is_exalted: false, is_debilitated: false },
+      { name: 'Rahu',    longitude: 125.9000, degree:  5.9000, rasi: { id: 4 }, is_retrograde: true,  is_exalted: false, is_debilitated: false },
+      { name: 'Ketu',    longitude: 305.9000, degree:  5.9000, rasi: { id: 10 }, is_retrograde: true, is_exalted: false, is_debilitated: false },
+    ],
+  };
+}
+
+describe('Prokerala v2 API shape — regression for off-by-one sign bug', () => {
+  let chart: Awaited<ReturnType<typeof generateChart>>;
+
+  beforeAll(async () => {
+    global.fetch = jest.fn()
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ data: buildFakeKundliPayload() }),
+        text: () => Promise.resolve(''),
+      }))
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ data: buildV2PlanetPayload() }),
+        text: () => Promise.resolve(''),
+      })) as any;
+    chart = await generateChart(BIRTH_DATA as any);
+  });
+
+  afterAll(() => { jest.resetAllMocks(); });
+
+  test('Sun lands in Taurus (signIndex 1) — not Aries (signIndex 0)', () => {
+    const sun = chart.planets.find(p => p.planet === 'Sun')!;
+    expect(sun.sign).toBe('Taurus');
+    expect(sun.signIndex).toBe(1);
+  });
+
+  test('Moon lands in Taurus (signIndex 1) — not Aries (signIndex 0)', () => {
+    const moon = chart.planets.find(p => p.planet === 'Moon')!;
+    expect(moon.sign).toBe('Taurus');
+    expect(moon.signIndex).toBe(1);
+  });
+
+  test('Moon nakshatra is Mrigashira (starting dasha lord = Mars)', () => {
+    const moon = chart.planets.find(p => p.planet === 'Moon')!;
+    expect(moon.nakshatra).toBe('Mrigashira');
+    expect(chart.dashas![0]!.planet).toBe('Mars');
+  });
+
+  test('All planet signs match Swiss Eph reference (no off-by-one)', () => {
+    const expected: Record<string, string> = {
+      Sun: 'Taurus', Moon: 'Taurus', Mars: 'Gemini',
+      Mercury: 'Taurus', Jupiter: 'Taurus', Venus: 'Gemini',
+      Saturn: 'Sagittarius',
+    };
+    for (const [planet, sign] of Object.entries(expected)) {
+      const p = chart.planets.find(x => x.planet === planet)!;
+      expect({ planet, sign: p.sign }).toEqual({ planet, sign });
+    }
+  });
+});
+
 // ─── Suite 3: live proxy (opt-in) ────────────────────────────────────────────
 
 const LIVE = process.env.LIVE_API === '1';
