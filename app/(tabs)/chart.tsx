@@ -527,6 +527,18 @@ export default function ChartScreen() {
         </Text>
       </View>
 
+      {/* Approximate-mode banner — visible across every tab, not just Chart,
+          so users on the Dashas/Yogas/Planets tabs know the data isn't authoritative. */}
+      {chart?.isApproximate && showApproxNotice && (
+        <TouchableOpacity onPress={refreshChart} style={styles.approxBanner} disabled={refreshingChart}>
+          <Text style={styles.approxBannerText}>
+            {refreshingChart
+              ? 'Refreshing chart…'
+              : '✦ Positions estimated — live data unavailable. Tap to retry.'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Tab bar */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
         style={styles.tabsScroll} contentContainerStyle={styles.tabsContainer}>
@@ -811,9 +823,11 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 3 },
   tabsScroll: { borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
   tabsContainer: { paddingHorizontal: Spacing.md, gap: 8, alignItems: 'center', paddingVertical: 10 },
-  tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.cardBorder },
+  tab: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.cardBorder },
   tabActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
-  tabText: { fontSize: 12, fontFamily: Fonts.cinzel, color: Colors.muted, letterSpacing: 0.5 },
+  // Cinzel has tall caps that get clipped without an explicit lineHeight on iOS;
+  // setting it ≈1.5× fontSize gives the text container enough vertical room.
+  tabText: { fontSize: 12, lineHeight: 18, fontFamily: Fonts.cinzel, color: Colors.muted, letterSpacing: 0.5 },
   tabTextActive: { color: Colors.gold },
   scrollContent: { paddingBottom: 20 },
   section: { padding: Spacing.md },
@@ -831,6 +845,8 @@ const styles = StyleSheet.create({
   methodologyBadge: { fontSize: 10, color: Colors.mutedDark, fontFamily: Fonts.cormorantItalic, textAlign: 'center', marginTop: 8, letterSpacing: 0.5 },
   approxNoticeRow: { marginTop: 8, alignSelf: 'center' },
   approxNoticeText: { fontSize: 11, color: Colors.amber, fontFamily: Fonts.cormorantItalic, textAlign: 'center', textDecorationLine: 'underline' },
+  approxBanner: { backgroundColor: Colors.goldDim, borderBottomWidth: 1, borderBottomColor: Colors.gold, paddingVertical: 8, paddingHorizontal: Spacing.md },
+  approxBannerText: { fontSize: 12, lineHeight: 18, color: Colors.amber, fontFamily: Fonts.cormorantItalic, textAlign: 'center' },
 
   lagnaCard: { backgroundColor: Colors.goldDim, borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 8 },
   lagnaLabel: { fontSize: 9, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 4 },
