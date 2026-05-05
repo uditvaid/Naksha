@@ -20,6 +20,7 @@
  */
 
 import { ChartData, BirthData } from '@store/userStore';
+import { findActiveDasha } from '@utils/vedic';
 import { deriveArchetype, getArchetypeSystemContext, ArchetypeProfile } from './archetype';
 import { buildBibleSystemBlock } from './bibles';
 import { PhaseState, buildPhaseBlock, computeAbsenceDays } from './phase';
@@ -95,7 +96,7 @@ ${chart.planets.map((p) =>
   (p.isExalted ? ' (exalted)' : p.isDebilitated ? ' (debilitated)' : '')
 ).join('\n')}
 
-Active Dasha: ${chart.dashas.find((d) => d.isActive)?.planet ?? 'Unknown'} Mahadasha
+Active Dasha: ${findActiveDasha(chart.dashas)?.planet ?? 'Unknown'} Mahadasha
 ${chart.yogas.length > 0 ? `Yogas: ${chart.yogas.join(', ')}` : ''}`;
 }
 
@@ -152,54 +153,57 @@ function buildSpecialHandlingSection(
 
 // ─── Main Assembler ────────────────────────────────────────────────────────────
 
-export function assembleGuruSystemPrompt(input: PromptAssemblyInput): string {
+// Returns the system prompt split into a stable prefix (eligible for Anthropic
+// prompt caching) and a dynamic suffix that changes per message. The prefix
+// holds identity + seeker profile + full chart data + universal rules — all
+// stable per user/chart. The suffix holds phase/arc/memory/chart-context/rhythm
+// /special handling — these update between messages.
+export function assembleGuruSystemPromptParts(input: PromptAssemblyInput): { stablePrefix: string; dynamicSuffix: string } {
   const { birthData, chart, phaseState, arc, memory, rhythmContext, messageClass } = input;
 
   const archetypeProfile = deriveArchetype(chart);
   const absenceDays = computeAbsenceDays(phaseState.lastSessionDate);
 
-  const sections: string[] = [
+  // ─── Stable prefix (cacheable) ────────────────────────────────────────────────
+  const prefix: string[] = [
     buildIdentitySection(archetypeProfile),
     buildSeekerProfileSection(chart, archetypeProfile),
+    buildChartDataSection(chart, birthData),
+    buildUniversalRules(),
   ];
+  const stablePrefix = prefix.join('\n\n');
 
-  // Phase context
+  // ─── Dynamic suffix (per-message) ─────────────────────────────────────────────
+  const suffix: string[] = [];
   const phaseBlock = buildPhaseBlock(phaseState, absenceDays);
   if (phaseBlock) {
-    sections.push(`════════════════════════════════════════\nRELATIONSHIP PHASE\n════════════════════════════════════════\n\n${phaseBlock}`);
+    suffix.push(`════════════════════════════════════════\nRELATIONSHIP PHASE\n════════════════════════════════════════\n\n${phaseBlock}`);
   }
-
-  // Arc context — only if there's content
   const arcBlock = buildArcBlock(arc, phaseState.sessionDays);
   if (arcBlock) {
-    sections.push(`════════════════════════════════════════\nRELATIONSHIP ARC\n════════════════════════════════════════\n\n${arcBlock}`);
+    suffix.push(`════════════════════════════════════════\nRELATIONSHIP ARC\n════════════════════════════════════════\n\n${arcBlock}`);
   }
-
-  // Memory block — only if there's content
   const memoryBlock = buildMemoryBlock(memory);
   if (memoryBlock) {
-    sections.push(`════════════════════════════════════════\nMEMORY\n════════════════════════════════════════\n\n${memoryBlock}`);
+    suffix.push(`════════════════════════════════════════\nMEMORY\n════════════════════════════════════════\n\n${memoryBlock}`);
   }
-
-  // Chart context
   const chartContextBlock = buildChartContextBlock(chart, birthData);
-  sections.push(`════════════════════════════════════════\nCHART CONTEXT\n════════════════════════════════════════\n\n${chartContextBlock}`);
-
-  // Full chart data
-  sections.push(buildChartDataSection(chart, birthData));
-
-  // Universal rules
-  sections.push(buildUniversalRules());
-
-  // Rhythm instruction
+  suffix.push(`════════════════════════════════════════\nCHART CONTEXT\n════════════════════════════════════════\n\n${chartContextBlock}`);
   const rhythmBlock = buildRhythmBlock(rhythmContext);
-  sections.push(`════════════════════════════════════════\nTHIS RESPONSE\n════════════════════════════════════════\n\n${rhythmBlock}`);
-
-  // Special handling (crisis, parasocial, etc.)
+  suffix.push(`════════════════════════════════════════\nTHIS RESPONSE\n════════════════════════════════════════\n\n${rhythmBlock}`);
   const specialSection = buildSpecialHandlingSection(messageClass, archetypeProfile.key);
-  if (specialSection) sections.push(specialSection);
+  if (specialSection) suffix.push(specialSection);
+  const dynamicSuffix = suffix.join('\n\n');
 
-  return sections.join('\n\n');
+  return { stablePrefix, dynamicSuffix };
+}
+
+// Backwards-compatible single-string assembler — concatenates the parts.
+// Callers that don't yet thread the cacheable split through (or callers like
+// the default-prompt path) can keep using this.
+export function assembleGuruSystemPrompt(input: PromptAssemblyInput): string {
+  const { stablePrefix, dynamicSuffix } = assembleGuruSystemPromptParts(input);
+  return dynamicSuffix ? `${stablePrefix}\n\n${dynamicSuffix}` : stablePrefix;
 }
 
 // ─── Fallback (no chart) ───────────────────────────────────────────────────────

@@ -136,8 +136,6 @@ export default function SavedReadingsScreen() {
         showsVerticalScrollIndicator={false}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
-        windowSize={5}
-        removeClippedSubviews
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>✦</Text>

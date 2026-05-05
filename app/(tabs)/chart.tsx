@@ -7,11 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Rect, Line, Text as SvgText, G } from 'react-native-svg';
 import { useAppStore } from '@store/userStore';
 import { useShallow } from 'zustand/react/shallow';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { PLANETS_BY_ID } from '@constants/astrology';
 import { askGuru } from '@services/claude';
 import { generateChart } from '@services/prokerala';
+import { findActiveDasha } from '@utils/vedic';
 
 // ─── Lagna (Rising Sign) descriptions ────────────────────────────────────────
 
@@ -321,20 +322,29 @@ export default function ChartScreen() {
   const planets = useMemo(() => chartPlanets ?? [], [chartPlanets]);
   const dashas = useMemo(() => chartDashas ?? [], [chartDashas]);
   const yogas = useMemo(() => chartYogas ?? [], [chartYogas]);
-  const now = useMemo(() => new Date(), []);
+  // `nowTick` advances on screen focus (and on dasha update) so progress bars and
+  // past/active/future labels stay correct without trusting the persisted
+  // `dasha.isActive` flag, which freezes at chart-generation time.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useFocusEffect(useCallback(() => { setNowTick(Date.now()); }, []));
+  const now = useMemo(() => new Date(nowTick), [nowTick]);
 
-  const dashaRows = useMemo(() => dashas.map(dasha => {
-    const start = new Date(dasha.startDate);
-    const end = new Date(dasha.endDate);
-    const total = end.getTime() - start.getTime();
-    const elapsed = Math.min(now.getTime() - start.getTime(), total);
-    const pct = total > 0 ? Math.max(0, Math.min(1, elapsed / total)) : 0;
-    const planet = PLANETS_BY_ID.get(dasha.planet.toLowerCase());
-    const info = DASHA_MEANINGS[dasha.planet];
-    const isPast = !dasha.isActive && now >= end;
-    const isFuture = !dasha.isActive && now < start;
-    return { dasha, start, end, pct, planet, info, isPast, isFuture };
-  }), [dashas, now]);
+  const dashaRows = useMemo(() => {
+    const t = now.getTime();
+    return dashas.map(dasha => {
+      const start = new Date(dasha.startDate);
+      const end = new Date(dasha.endDate);
+      const total = end.getTime() - start.getTime();
+      const elapsed = Math.min(t - start.getTime(), total);
+      const pct = total > 0 ? Math.max(0, Math.min(1, elapsed / total)) : 0;
+      const planet = PLANETS_BY_ID.get(dasha.planet.toLowerCase());
+      const info = DASHA_MEANINGS[dasha.planet];
+      const isActive = start.getTime() <= t && t < end.getTime();
+      const isPast = !isActive && t >= end.getTime();
+      const isFuture = !isActive && t < start.getTime();
+      return { dasha, start, end, pct, planet, info, isActive, isPast, isFuture };
+    });
+  }, [dashas, now]);
   const isPremium = user.isPremium;
   const guruCacheRef = useRef<Record<string, string>>({});
   const guruContextRef = useRef<string>('');
@@ -343,20 +353,18 @@ export default function ChartScreen() {
   // overwriting content for a different (or already-closed) modal session.
   const requestTokenRef = useRef(0);
 
-  const openDasha = useCallback(async (dasha: any) => {
+  const openDasha = useCallback(async (dasha: any, isActive: boolean, isPast: boolean, isFuture: boolean) => {
     const start = new Date(dasha.startDate);
     const end = new Date(dasha.endDate);
-    const isPast = !dasha.isActive && now >= end;
-    const isFuture = !dasha.isActive && now < start;
 
     // Future periods are premium-only
     if (isFuture && !isPremium) { router.push('/paywall'); return; }
 
     const info = DASHA_MEANINGS[dasha.planet];
-    const cacheKey = `dasha-${dasha.planet}-${isPast ? 'past' : dasha.isActive ? 'active' : 'future'}`;
+    const cacheKey = `dasha-${dasha.planet}-${isPast ? 'past' : isActive ? 'active' : 'future'}`;
     setModalTitle(`${dasha.planet} Period`);
     setModalSubtitle(`${start.getFullYear()} – ${end.getFullYear()} · ${dasha.years} years`);
-    guruContextRef.current = `I'm ${dasha.isActive ? 'currently in' : isPast ? 'reflecting on' : 'preparing for'} my ${dasha.planet} Mahadasha (${start.getFullYear()}–${end.getFullYear()}):`;
+    guruContextRef.current = `I'm ${isActive ? 'currently in' : isPast ? 'reflecting on' : 'preparing for'} my ${dasha.planet} Mahadasha (${start.getFullYear()}–${end.getFullYear()}):`;
 
     const staticInfo = info
       ? `THEME: ${info.theme}\n\n${info.description}\n\nOPPORTUNITIES\n${info.opportunities}\n\nWATCH FOR\n${info.watch}`
@@ -386,7 +394,7 @@ export default function ChartScreen() {
     let prompt: string;
     if (isPast) {
       prompt = `I went through my ${dasha.planet} Mahadasha from ${start.getFullYear()} to ${end.getFullYear()} (${dasha.years} years) — this period has now passed. Reflecting on it through the lens of my birth chart: what were the defining themes, life lessons, and karmic patterns that this period would have brought for me specifically? How would my particular planetary placements have coloured this period? What was being resolved or revealed? Give me a meaningful retrospective reading. Explain in simple, clear English.`;
-    } else if (dasha.isActive) {
+    } else if (isActive) {
       prompt = `I'm currently in my ${dasha.planet} Mahadasha (${start.getFullYear()}–${end.getFullYear()}, ${dasha.years} years). Give me a deeply personal reading of what this planetary period means specifically for me based on my chart. Cover: the core theme and energy of this period in my life; how it interacts with my specific planetary placements; what opportunities I should look for; what challenges to be mindful of; and practical advice for navigating this period well. Explain in simple, clear English without jargon.`;
     } else {
       prompt = `I will enter my ${dasha.planet} Mahadasha from ${start.getFullYear()} to ${end.getFullYear()} (${dasha.years} years) in the future. Based on my specific birth chart, how should I prepare for this period? What themes, opportunities, and challenges can I expect? Which areas of my life will this period most strongly activate? What can I do now to make the most of it when it arrives? Explain in simple, clear English without jargon.`;
@@ -404,7 +412,7 @@ export default function ChartScreen() {
     } finally {
       if (token === requestTokenRef.current) setModalLoading(false);
     }
-  }, [now, isPremium, user.birthData, user.chart]);
+  }, [isPremium, user.birthData, user.chart]);
 
   const openYoga = useCallback(async (yoga: string) => {
     const cacheKey = `yoga-${yoga}`;
@@ -631,13 +639,13 @@ export default function ChartScreen() {
             {dashas.length === 0 ? (
               <Text style={styles.emptyText}>Generate your chart to see your planetary periods.</Text>
             ) : (
-              dashaRows.map(({ dasha, start, end, pct, planet, info, isPast, isFuture }) => {
+              dashaRows.map(({ dasha, start, end, pct, planet, info, isActive, isPast, isFuture }) => {
                 const locked = isFuture && !isPremium;
                 return (
                   <TouchableOpacity
                     key={dasha.planet + dasha.startDate}
-                    style={[styles.dashaCard, dasha.isActive && styles.dashaCardActive, isPast && styles.dashaCardPast]}
-                    onPress={() => openDasha(dasha)}
+                    style={[styles.dashaCard, isActive && styles.dashaCardActive, isPast && styles.dashaCardPast]}
+                    onPress={() => openDasha(dasha, isActive, isPast, isFuture)}
                     activeOpacity={0.75}
                   >
                     <View style={styles.dashaHeader}>
@@ -650,7 +658,7 @@ export default function ChartScreen() {
                             <Text style={[styles.dashaPlanet, isPast && { color: Colors.muted }]}>
                               {dasha.planet} Period
                             </Text>
-                            {dasha.isActive && (
+                            {isActive && (
                               <View style={styles.activeBadge}>
                                 <Text style={styles.activeBadgeText}>NOW</Text>
                               </View>
@@ -676,7 +684,7 @@ export default function ChartScreen() {
                     <View style={styles.dashaTrack}>
                       <View style={[styles.dashaFill, {
                         width: `${pct * 100}%`,
-                        backgroundColor: dasha.isActive ? Colors.gold : (isPast ? Colors.muted : (planet?.color ?? Colors.gold)),
+                        backgroundColor: isActive ? Colors.gold : (isPast ? Colors.muted : (planet?.color ?? Colors.gold)),
                       }]} />
                     </View>
                   </TouchableOpacity>

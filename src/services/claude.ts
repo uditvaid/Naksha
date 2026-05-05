@@ -13,6 +13,7 @@ import { BirthData, ChartData, GuruMessage } from '@store/userStore';
 import { PROXY_BASE_URL } from '@constants/config';
 import { buildAuthHeader } from './auth';
 import { deriveUserPersona, buildDynamicGuruPrompt } from './personaEngine';
+import { findActiveDasha } from '@utils/vedic';
 import { useGuruRelationshipStore } from '@store/guruRelationshipStore';
 import { useGuruArcStore } from '@store/guruArcStore';
 import { useGuruMemoryStore } from '@store/guruMemoryStore';
@@ -20,7 +21,7 @@ import { useGuruTelemetryStore } from '@store/guruTelemetryStore';
 import { tickExchangeCounter, extractArcSignals } from './arcExtractor';
 import { extractMemorySignals } from './memoryExtractor';
 import { getChineseCompatibility } from '@utils/bazi';
-import { assembleGuruSystemPrompt, assembleDefaultGuruPrompt } from '@lib/persona/promptAssembler';
+import { assembleGuruSystemPromptParts, assembleDefaultGuruPrompt } from '@lib/persona/promptAssembler';
 import { classifyUserMessage, analyzeResponse } from '@lib/persona/guardrails';
 import { selectResponseForm, RhythmContext } from '@lib/persona/rhythm';
 import { detectTopics } from '@lib/persona/telemetry';
@@ -28,13 +29,17 @@ import { detectTopics } from '@lib/persona/telemetry';
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const MODEL = 'claude-sonnet-4-6';
 const REQUEST_TIMEOUT_MS = 30000;
+// Palm reading uploads a base64 JPEG (typically 3–7 MB after expo-image-picker
+// compresses at quality 0.8). On cellular this can take well over 30s for the
+// upload alone before the model even responds, so the palm path gets longer.
+const IMAGE_REQUEST_TIMEOUT_MS = 60000;
 
 interface ClaudeMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+export async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -52,9 +57,21 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 async function callClaude(
   system: string,
   messages: ClaudeMessage[],
-  maxTokens = 1024
+  maxTokens = 1024,
+  // When provided, `system` is split into [cacheableSystemPrefix, system] and
+  // sent as two text blocks with cache_control on the first. Anthropic caches
+  // the prefix bytes for 5 minutes; subsequent calls with the same prefix pay
+  // ~10% of the input-token cost on cache hits.
+  cacheableSystemPrefix?: string,
 ): Promise<string> {
   const authHeader = await buildAuthHeader();
+
+  const systemPayload = cacheableSystemPrefix
+    ? [
+        { type: 'text', text: cacheableSystemPrefix, cache_control: { type: 'ephemeral' } },
+        ...(system ? [{ type: 'text', text: system }] : []),
+      ]
+    : system;
 
   const response = await fetchWithTimeout(API_URL, {
     method: 'POST',
@@ -62,7 +79,7 @@ async function callClaude(
       'Content-Type': 'application/json',
       'x-naksha-auth': authHeader,
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages }),
+    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system: systemPayload, messages }),
   }, REQUEST_TIMEOUT_MS);
 
   if (!response.ok) {
@@ -89,9 +106,19 @@ async function callClaude(
 // ─── Build full system prompt ─────────────────────────────────────────────────
 // Derives persona from chart, builds dynamic Guru voice, injects chart data
 
-function buildSystemPrompt(birthData: BirthData, chart: ChartData | null, phaseBlock?: string, arcBlock?: string): string {
-  // Dynamic persona from chart (falls back to balanced defaults if no chart yet)
-  const persona = chart ? deriveUserPersona(chart) : null;
+function buildSystemPrompt(
+  birthData: BirthData,
+  chart: ChartData | null,
+  phaseBlock?: string,
+  arcBlock?: string,
+  precomputedPersona?: ReturnType<typeof deriveUserPersona> | null,
+): string {
+  // Dynamic persona from chart (falls back to balanced defaults if no chart yet).
+  // Callers that already need persona for other purposes (e.g. getDailyReading)
+  // can pass it in to avoid re-deriving.
+  const persona = precomputedPersona !== undefined
+    ? precomputedPersona
+    : (chart ? deriveUserPersona(chart) : null);
   const guruSystem = persona
     ? buildDynamicGuruPrompt(persona as any)
     : defaultGuruSystem();
@@ -112,7 +139,7 @@ ${chart.planets.map(p =>
   `${p.planet}: ${p.sign}, House ${p.house}, ${p.nakshatra} Nakshatra pada ${p.pada}${p.isRetrograde ? ' ℞' : ''}${p.isExalted ? ' (exalted)' : p.isDebilitated ? ' (debilitated)' : ''}`
 ).join('\n')}
 
-Active Mahadasha: ${chart.dashas.find(d => d.isActive)?.planet ?? 'Unknown'} — the ruling planetary period
+Active Mahadasha: ${findActiveDasha(chart.dashas)?.planet ?? 'Unknown'} — the ruling planetary period
 Key Yogas: ${chart.yogas.join(', ') || 'Standard placements'}
 ` : `
 Seeker: ${birthData.name}
@@ -168,9 +195,10 @@ export async function askGuru(
   };
 
   let system: string;
+  let cacheablePrefix: string | undefined;
 
   if (chart) {
-    system = assembleGuruSystemPrompt({
+    const parts = assembleGuruSystemPromptParts({
       birthData,
       chart,
       phaseState: {
@@ -187,6 +215,8 @@ export async function askGuru(
       messageClass,
       sessionTurnCount: rhythmContext.sessionTurnCount,
     });
+    cacheablePrefix = parts.stablePrefix;
+    system = parts.dynamicSuffix;
   } else {
     system = assembleDefaultGuruPrompt(birthData);
   }
@@ -196,17 +226,19 @@ export async function askGuru(
     { role: 'user', content: question },
   ];
 
-  let response = await callClaude(system, messages, 1400);
+  let response = await callClaude(system, messages, 1400, cacheablePrefix);
 
   // Guardrails: one regen pass if response has problems
   if (chart && messageClass === 'normal') {
+    const activeDashaPlanet = findActiveDasha(chart.dashas)?.planet;
     const hasChartRef = response.includes(chart.lagna) ||
       chart.planets.some(p => response.includes(p.planet)) ||
-      chart.dashas.some(d => d.isActive && response.includes(d.planet));
+      (!!activeDashaPlanet && response.includes(activeDashaPlanet));
     const guardResult = analyzeResponse(response, 'jupiter_sage', hasChartRef);
     if (!guardResult.passes && guardResult.regenerationInstruction) {
       const regenSystem = system + `\n\n${guardResult.regenerationInstruction}`;
-      response = await callClaude(regenSystem, messages, 1400).catch(() => response);
+      // Reuse the cacheable prefix on the regen so we still hit the prompt cache.
+      response = await callClaude(regenSystem, messages, 1400, cacheablePrefix).catch(() => response);
     }
   }
 
@@ -257,7 +289,10 @@ export async function getDailyReading(
   birthData: BirthData,
   chart: ChartData | null
 ): Promise<string> {
-  const system = buildSystemPrompt(birthData, chart);
+  // Derive persona once and reuse — both buildSystemPrompt and the user-content
+  // template need it, and the derivation iterates planets / computes dosha.
+  const persona = chart ? deriveUserPersona(chart) : null;
+  const system = buildSystemPrompt(birthData, chart, undefined, undefined, persona);
   const today = new Date();
   const dateStr = today.toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -269,10 +304,13 @@ export async function getDailyReading(
     Friday: 'Venus (Shukra)', Saturday: 'Saturn (Shani)',
   };
   const dayRuler = WEEKDAY_PLANETS[weekday] ?? 'the planetary council';
-  const persona = chart ? deriveUserPersona(chart) : null;
   const firstName = birthData.name.split(' ')[0] ?? birthData.name;
 
-  return callClaude(system, [{
+  // The whole system prompt here is stable per (user, chart) — birth data,
+  // planets, persona derivation. Cache the entire thing as the prefix so a
+  // user opening their daily reading twice in a 5-minute window pays cached
+  // input pricing on the second call.
+  return callClaude('', [{
     role: 'user',
     content: `Offer ${firstName} their personalised daily reading for ${dateStr}.
 
@@ -285,7 +323,7 @@ Write in plain, warm English that anyone can understand — no astrology jargon,
 Cover: how today's energy feels and what it's good for; one thing worth paying attention to in their life right now; something to move gently with today; and one simple, practical thing they can do this morning to feel more grounded and clear.
 
 Keep it warm and personal — like a trusted friend who happens to see the bigger picture. Address ${firstName} by first name naturally within the reading (not at the very start as a salutation, but woven in once or twice). Do not use markdown formatting — no #, **, or bullet points. Plain prose only.`,
-  }], 700);
+  }], 700, system);
 }
 
 // ─── Palm Reading ─────────────────────────────────────────────────────────────
@@ -324,7 +362,7 @@ Write in plain, warm English that anyone can understand. Be specific to what you
         ],
       }],
     }),
-  }, REQUEST_TIMEOUT_MS);
+  }, IMAGE_REQUEST_TIMEOUT_MS);
 
   if (!response.ok) throw new Error('Palm reading service temporarily unavailable.');
   const data = await response.json();
@@ -429,7 +467,7 @@ export async function getCompatibilityReading(
 Lagna: ${chart.lagna}
 Moon: ${moon?.sign ?? 'Unknown'} · ${moon?.nakshatra ?? 'Unknown'} Nakshatra, pada ${moon?.pada ?? 1}
 Planets:\n${planets}
-Active Dasha: ${chart.dashas?.find(d => d.isActive)?.planet ?? 'Unknown'}
+Active Dasha: ${findActiveDasha(chart.dashas)?.planet ?? 'Unknown'}
 Yogas: ${chart.yogas?.join(', ') || 'Standard placements'}`;
   };
 
@@ -509,7 +547,7 @@ export async function getTarotReading(
     if (!birthData || !chart) return '';
     const moon = chart.planets?.find(p => p.planet === 'Moon');
     const sun = chart.planets?.find(p => p.planet === 'Sun');
-    const dasha = chart.dashas?.find(d => d.isActive);
+    const dasha = findActiveDasha(chart.dashas);
     return `\nQuerent context (use lightly to personalise — do not let it override the cards):
 - Lagna: ${chart.lagna}
 - Moon sign: ${moon?.sign ?? '—'} (${moon?.nakshatra ?? '—'} nakshatra)

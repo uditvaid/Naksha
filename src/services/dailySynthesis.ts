@@ -25,6 +25,7 @@ import { DailyRecord } from '@store/dailyContinuityStore';
 import { checkDailyGuardrails } from '@lib/daily/guardrails';
 import { buildChartContextBlock } from '@lib/persona/chartContext';
 import { deriveUserPersona } from './personaEngine';
+import { fetchWithTimeout } from './claude';
 
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const MODEL = 'claude-sonnet-4-6';
@@ -150,7 +151,7 @@ export async function generateDaily(
 
   try {
     const authHeader = await buildAuthHeader();
-    const res = await fetch(API_URL, {
+    const res = await fetchWithTimeout(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-naksha-auth': authHeader },
       body: JSON.stringify({
@@ -159,7 +160,7 @@ export async function generateDaily(
         system: 'You generate daily astrological guidance messages. Return valid JSON only. No explanation, no markdown around the JSON.',
         messages: [{ role: 'user', content: prompt }],
       }),
-    });
+    }, 25000);
 
     if (!res.ok) throw new Error('Daily generation failed');
 
@@ -175,7 +176,7 @@ export async function generateDaily(
     let expanded = parsed.expanded ?? '';
     if (!guardResult.passes) {
       // One regen attempt with feedback
-      const regenRes = await fetch(API_URL, {
+      const regenRes = await fetchWithTimeout(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-naksha-auth': authHeader },
         body: JSON.stringify({
@@ -184,7 +185,7 @@ export async function generateDaily(
           system: 'You regenerate a daily message to fix specific problems. Return only the corrected "expanded" text as plain JSON: {"expanded": "..."}',
           messages: [{ role: 'user', content: `Original:\n${expanded}\n\nProblems:\n${guardResult.issues.join('\n')}\n\nFix and return JSON.` }],
         }),
-      }).catch(() => null);
+      }, 15000).catch(() => null);
 
       if (regenRes?.ok) {
         const rd = await regenRes.json();

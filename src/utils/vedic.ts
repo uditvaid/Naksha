@@ -1,5 +1,30 @@
-import { BirthData, ChartData, PlanetPosition, DashaPeriod } from '@store/userStore';
+import { BirthData, ChartData, PlanetPosition, DashaPeriod, AntarDasha } from '@store/userStore';
 import { NAKSHATRAS, MAHADASHA_YEARS } from '@constants/astrology';
+
+// Resolve the currently-active mahadasha from a stored dasha list, ignoring the
+// persisted `isActive` field which is computed at chart-generation time and
+// goes stale after the user crosses a period boundary without regenerating.
+export function findActiveDasha(
+  dashas: DashaPeriod[] | undefined,
+  now: Date = new Date(),
+): DashaPeriod | undefined {
+  if (!dashas?.length) return undefined;
+  const t = now.getTime();
+  return dashas.find(
+    (d) => new Date(d.startDate).getTime() <= t && t < new Date(d.endDate).getTime(),
+  );
+}
+
+export function findActiveAntardasha(
+  antardashas: AntarDasha[] | undefined,
+  now: Date = new Date(),
+): AntarDasha | undefined {
+  if (!antardashas?.length) return undefined;
+  const t = now.getTime();
+  return antardashas.find(
+    (a) => new Date(a.startDate).getTime() <= t && t < new Date(a.endDate).getTime(),
+  );
+}
 
 // Lahiri Ayanamsha (approximate)
 const LAHIRI_AYANAMSHA_2000 = 23.853;
@@ -66,8 +91,6 @@ export function calculateVimshottariDasha(moonDegree: number, birthDate: Date): 
   const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
   let currentDate = new Date(birthDate.getTime() - elapsedYears * MS_PER_YEAR);
 
-  const now = new Date();
-
   for (let i = 0; i < 9; i++) {
     const planetIndex = (startIndex + i) % 9;
     const planet = DASHA_ORDER[planetIndex] ?? 'Ketu';
@@ -79,13 +102,43 @@ export function calculateVimshottariDasha(moonDegree: number, birthDate: Date): 
       startDate: currentDate.toISOString(),
       endDate: endDate.toISOString(),
       years,
-      isActive: currentDate <= now && now < endDate,
+      antardasha: computeAntardashas(planet, currentDate, years, MS_PER_YEAR),
     });
 
     currentDate = new Date(endDate);
   }
 
   return dashas;
+}
+
+// Vimshottari antardasha (sub-periods). Each mahadasha contains 9 antardashas
+// in the standard cycle order, starting from the mahadasha lord itself. Each
+// antardasha's length is `mahadasha.years * antardasha_lord.years / 120`.
+function computeAntardashas(
+  mahadashaPlanet: string,
+  mahadashaStart: Date,
+  mahadashaYears: number,
+  msPerYear: number,
+): AntarDasha[] {
+  const startIdx = DASHA_ORDER.indexOf(mahadashaPlanet);
+  if (startIdx < 0) return [];
+
+  const antardashas: AntarDasha[] = [];
+  let cursor = mahadashaStart.getTime();
+
+  for (let i = 0; i < 9; i++) {
+    const planet = DASHA_ORDER[(startIdx + i) % 9] ?? 'Ketu';
+    const subYears = (mahadashaYears * (MAHADASHA_YEARS[planet] ?? 7)) / 120;
+    const endMs = cursor + subYears * msPerYear;
+    antardashas.push({
+      planet,
+      startDate: new Date(cursor).toISOString(),
+      endDate: new Date(endMs).toISOString(),
+    });
+    cursor = endMs;
+  }
+
+  return antardashas;
 }
 
 // Calculate life path number for numerology

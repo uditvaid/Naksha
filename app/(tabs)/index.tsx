@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAppStore, onAppReset } from '@store/userStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getDailyReading } from '@services/claude';
@@ -10,6 +10,7 @@ import { computeLunarPhase } from '@lib/daily/signals';
 import { DailyShareButton } from '@components/DailyShareButton';
 import { useDailyContinuityStore, DailyRecord } from '@store/dailyContinuityStore';
 import { todaysAffirmation, todaysFocus } from '@lib/dailyAffirmation';
+import { findActiveDasha, findActiveAntardasha } from '@utils/vedic';
 
 function stripMarkdown(text: string): string {
   return text
@@ -24,6 +25,8 @@ function stripMarkdown(text: string): string {
 // Module-level cache survives tab unmounts — avoids refetching every time user navigates back.
 // Keyed on (date, userKey) so a profile reset / re-onboard invalidates the previous user's reading.
 let _dailyReadingCache: { date: string; userKey: string; text: string } | null = null;
+// In-flight guard so pull-to-refresh during initial load doesn't fire two parallel API calls.
+let _dailyReadingInFlight: Promise<void> | null = null;
 
 function userCacheKey(birthData: { name: string; dateOfBirth: string } | null): string {
   if (!birthData) return '';
@@ -45,7 +48,7 @@ function formatArchiveDate(iso: string): string {
 
 // Clear the module-level cache when the user resets/logs out so a re-onboarded user
 // does not see the previous user's daily reading until the app restarts.
-onAppReset(() => { _dailyReadingCache = null; });
+onAppReset(() => { _dailyReadingCache = null; _dailyReadingInFlight = null; });
 
 export default function HomeScreen() {
   const { birthData, chart, isPremium, aiDisclosureAcknowledged } = useAppStore(useShallow(s => ({
@@ -56,8 +59,9 @@ export default function HomeScreen() {
   })));
   const acknowledgeAIDisclosure = useAppStore(s => s.acknowledgeAIDisclosure);
   const initialKey = userCacheKey(birthData);
+  const initialDateKey = new Date().toISOString().split('T')[0]!;
   const [dailyReading, setDailyReading] = useState(
-    _dailyReadingCache?.date === new Date().toDateString() && _dailyReadingCache?.userKey === initialKey
+    _dailyReadingCache?.date === initialDateKey && _dailyReadingCache?.userKey === initialKey
       ? _dailyReadingCache.text
       : ''
   );
@@ -87,69 +91,84 @@ export default function HomeScreen() {
 
   const chartPlanets = chart?.planets;
   const chartDashas = chart?.dashas;
+  // `nowTick` bumps on focus so date/time-derived values refresh after the user
+  // returns to this tab post-midnight without keeping the screen rerendering.
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const chartDerived = useMemo(() => {
     const planets = chartPlanets ?? [];
     return {
       moon: planets.find(p => p.planet === 'Moon'),
       sun: planets.find(p => p.planet === 'Sun'),
-      activeDasha: chartDashas?.find(d => d.isActive),
+      activeDasha: findActiveDasha(chartDashas, new Date(nowTick)),
     };
-  }, [chartPlanets, chartDashas]);
+  }, [chartPlanets, chartDashas, nowTick]);
   const { moon, sun, activeDasha } = chartDerived;
 
   // Same affirmation + focus shown in today's 8am push, surfaced on the home page.
-  const dailyAffirmation = useMemo(() => todaysAffirmation(), []);
+  // Re-derive whenever the focus tick advances so the strings refresh after midnight
+  // without requiring the user to fully relaunch the app.
+  const dailyAffirmation = useMemo(() => todaysAffirmation(), [nowTick]);
   const dailyFocus = useMemo(
     () => todaysFocus(activeDasha?.planet),
-    [activeDasha?.planet],
+    [activeDasha?.planet, nowTick],
   );
 
   const { dateStr, greeting, todayLunarPhase } = useMemo(() => {
-    const t = new Date();
+    const t = new Date(nowTick);
     const h = t.getHours();
     return {
       dateStr: t.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
       greeting: h < 12 ? 'Suprabhat' : h < 17 ? 'Namaskar' : 'Good Evening',
       todayLunarPhase: computeLunarPhase(t),
     };
-  }, []);
+  }, [nowTick]);
 
   const fetchDailyReading = useCallback(async (force = false) => {
     if (!birthData) return;
-    const todayKey = new Date().toDateString();
+    // ISO YYYY-MM-DD for cache key — toDateString() is locale-sensitive and
+    // can produce false misses across DST or locale shifts.
+    const todayKey = new Date().toISOString().split('T')[0]!;
     const key = userCacheKey(birthData);
     if (!force && _dailyReadingCache?.date === todayKey && _dailyReadingCache?.userKey === key) return;
+    // Coalesce concurrent callers (pull-to-refresh during initial load, etc.)
+    // onto a single in-flight request instead of firing duplicate API calls.
+    if (_dailyReadingInFlight) return _dailyReadingInFlight;
     setLoadingReading(true);
-    try {
-      const raw = await getDailyReading(birthData, chart);
-      const reading = stripMarkdown(raw);
-      setDailyReading(reading);
-      _dailyReadingCache = { date: todayKey, userKey: key, text: reading };
+    _dailyReadingInFlight = (async () => {
+      try {
+        const raw = await getDailyReading(birthData, chart);
+        const reading = stripMarkdown(raw);
+        setDailyReading(reading);
+        _dailyReadingCache = { date: todayKey, userKey: key, text: reading };
 
-      // Persist to history — dedupe so refresh doesn't pile up records for the same day.
-      const isoDate = new Date().toISOString().split('T')[0]!;
-      const alreadyToday = useDailyContinuityStore.getState().dailyRecords.some(d => d.date === isoDate);
-      if (!alreadyToday) {
-        const dasha = chart?.dashas?.find(d => d.isActive)?.planet ?? 'Sun';
-        addDaily({
-          date: isoDate,
-          notification: reading.slice(0, 100),
-          card: reading.slice(0, 280),
-          expanded: reading,
-          tone: 'reflective',
-          lunarPhase: computeLunarPhase(new Date()),
-          mahadasha: dasha,
-          antardasha: null,
-          isQuietDay: false,
-          isDeepDay: false,
-          hasCallback: false,
-        });
+        // Persist to history — dedupe so refresh doesn't pile up records for the same day.
+        const isoDate = todayKey;
+        const alreadyToday = useDailyContinuityStore.getState().dailyRecords.some(d => d.date === isoDate);
+        if (!alreadyToday) {
+          const activeMahadasha = findActiveDasha(chart?.dashas);
+          const activeAntardasha = findActiveAntardasha(activeMahadasha?.antardasha);
+          addDaily({
+            date: isoDate,
+            notification: reading.slice(0, 100),
+            card: reading.slice(0, 280),
+            expanded: reading,
+            tone: 'reflective',
+            lunarPhase: computeLunarPhase(new Date()),
+            mahadasha: activeMahadasha?.planet ?? 'Sun',
+            antardasha: activeAntardasha?.planet ?? null,
+            isQuietDay: false,
+            isDeepDay: false,
+            hasCallback: false,
+          });
+        }
+      } catch (e: any) {
+        setDailyReading(`Unable to get reading: ${e?.message ?? 'Please try again shortly.'}`);
+      } finally {
+        setLoadingReading(false);
+        _dailyReadingInFlight = null;
       }
-    } catch (e: any) {
-      setDailyReading(`Unable to get reading: ${e?.message ?? 'Please try again shortly.'}`);
-    } finally {
-      setLoadingReading(false);
-    }
+    })();
+    return _dailyReadingInFlight;
   }, [birthData, chart, addDaily]);
 
   const onRefresh = async () => {
@@ -159,6 +178,11 @@ export default function HomeScreen() {
   };
 
   useEffect(() => { fetchDailyReading(); }, [fetchDailyReading]);
+
+  // Bump the focus tick whenever the user returns to this tab. Time-derived UI
+  // (greeting, date, lunar phase, affirmation, active dasha) re-evaluates so
+  // the screen stays correct after a midnight or noon boundary.
+  useFocusEffect(useCallback(() => { setNowTick(Date.now()); }, []));
 
   return (
     <SafeAreaView style={styles.container}>

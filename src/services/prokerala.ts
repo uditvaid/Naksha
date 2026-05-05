@@ -486,7 +486,6 @@ export async function generateChart(birthData: BirthData): Promise<ChartData> {
 
 function parseDashas(raw: any[]): DashaPeriod[] {
   if (!raw.length) return [];
-  const now = new Date();
 
   return raw.map((d: any) => {
     const start = new Date(d.start ?? d.start_date);
@@ -497,7 +496,6 @@ function parseDashas(raw: any[]): DashaPeriod[] {
       startDate: start.toISOString(),
       endDate: end.toISOString(),
       years: MAHADASHA_YEARS[planet] ?? 7,
-      isActive: start <= now && now < end,
     };
   });
 }

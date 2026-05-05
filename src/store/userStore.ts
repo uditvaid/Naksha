@@ -50,7 +50,6 @@ export interface DashaPeriod {
   startDate: string;
   endDate: string;
   years: number;
-  isActive: boolean;
   antardasha?: AntarDasha[];
 }
 
@@ -58,7 +57,6 @@ export interface AntarDasha {
   planet: string;
   startDate: string;
   endDate: string;
-  isActive: boolean;
 }
 
 export interface SavedChart {
@@ -173,7 +171,9 @@ export const useAppStore = create<AppState>()(
       clearGuruMessages: () => set({ guruMessages: [] }),
 
       incrementGuruQuestions: () => {
-        const today = new Date().toDateString();
+        // ISO YYYY-MM-DD — toDateString() is locale-sensitive and resets the
+        // counter when the user changes device language or DST shifts.
+        const today = new Date().toISOString().split('T')[0]!;
         set((state) => ({
           user: {
             ...state.user,
@@ -189,7 +189,7 @@ export const useAppStore = create<AppState>()(
       canAskGuru: () => {
         const { user } = get();
         if (user.isPremium) return true;
-        const today = new Date().toDateString();
+        const today = new Date().toISOString().split('T')[0]!;
         if (user.lastGuruDate !== today) return true;
         return user.guruQuestionsToday < FREE_GURU_QUESTIONS_PER_DAY;
       },
@@ -256,7 +256,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'nakshatra-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       migrate: (persistedState: any, version: number) => {
         let state = persistedState;
         if (version < 2 && state?.user && 'notificationsEnabled' in state.user) {
@@ -272,6 +272,24 @@ export const useAppStore = create<AppState>()(
               guruConsentGiven: state.user.guruConsentGiven ?? false,
             },
           };
+        }
+        // v4: drop the dead `isActive` field from persisted dasha/antardasha.
+        // No consumer reads it any more — the active period is derived at
+        // read time via findActiveDasha/findActiveAntardasha.
+        if (version < 4 && state?.user?.chart?.dashas) {
+          const stripped = state.user.chart.dashas.map((d: any) => {
+            const { isActive: _d, antardasha, ...rest } = d;
+            return {
+              ...rest,
+              ...(antardasha
+                ? { antardasha: antardasha.map((a: any) => {
+                    const { isActive: _a, ...arest } = a;
+                    return arest;
+                  }) }
+                : {}),
+            };
+          });
+          state = { ...state, user: { ...state.user, chart: { ...state.user.chart, dashas: stripped } } };
         }
         return state;
       },

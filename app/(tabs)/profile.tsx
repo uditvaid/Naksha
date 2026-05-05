@@ -9,6 +9,7 @@ import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { TEST_MODE, BUILD_PROFILE, PROXY_BASE_URL, REVENUECAT_IOS_KEY } from '@constants/config';
 import { getDailyReading } from '@services/claude';
 import { generateChart } from '@services/prokerala';
+import { findActiveDasha } from '@utils/vedic';
 
 const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -23,7 +24,7 @@ export default function ProfileScreen() {
 
   const birthData = user.birthData;
   const chart = user.chart;
-  const activeDasha = chart?.dashas?.find(d => d.isActive);
+  const activeDasha = findActiveDasha(chart?.dashas);
   const moonPlanet = chart?.planets?.find(p => p.planet === 'Moon');
 
   const handleRestorePurchases = async () => {

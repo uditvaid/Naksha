@@ -12,7 +12,6 @@ const baseChart: ChartData = {
       startDate: '2020-01-01',
       endDate: '2039-01-01',
       years: 19,
-      isActive: true,
       antardasha: [],
     }
   ],

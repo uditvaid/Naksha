@@ -16,6 +16,7 @@
  */
 
 import { ChartData, DashaPeriod, AntarDasha, PlanetPosition, BirthData } from '@store/userStore';
+import { findActiveDasha, findActiveAntardasha } from '@utils/vedic';
 
 // ─── Dasha Themes (classical) ──────────────────────────────────────────────────
 
@@ -43,12 +44,12 @@ function describePlanetDignity(p: PlanetPosition): string | null {
 // ─── What's Coming Soon ────────────────────────────────────────────────────────
 
 function findNextDashaShift(dashas: DashaPeriod[]): string | null {
-  const active = dashas.find((d) => d.isActive);
+  const active = findActiveDasha(dashas);
   if (!active) return null;
 
   // Check antardasha shifts first (happen more frequently)
   if (active.antardasha) {
-    const activeAntar = active.antardasha.find((a) => a.isActive);
+    const activeAntar = findActiveAntardasha(active.antardasha);
     if (activeAntar) {
       const endDate = new Date(activeAntar.endDate);
       const now = new Date();
@@ -88,8 +89,8 @@ function findNextDashaShift(dashas: DashaPeriod[]): string | null {
 export function buildChartContextBlock(chart: ChartData, birthData: BirthData): string {
   const parts: string[] = [];
 
-  const activeDasha = chart.dashas.find((d) => d.isActive);
-  const activeAntar = activeDasha?.antardasha?.find((a) => a.isActive);
+  const activeDasha = findActiveDasha(chart.dashas);
+  const activeAntar = findActiveAntardasha(activeDasha?.antardasha);
 
   // Current dasha period
   if (activeDasha) {
@@ -140,8 +141,8 @@ export function buildChartContextBlock(chart: ChartData, birthData: BirthData): 
 
 export function buildCompactChartSummary(chart: ChartData, birthData: BirthData): string {
   const moon = chart.planets.find((p) => p.planet === 'Moon');
-  const activeDasha = chart.dashas.find((d) => d.isActive);
-  const activeAntar = activeDasha?.antardasha?.find((a) => a.isActive);
+  const activeDasha = findActiveDasha(chart.dashas);
+  const activeAntar = findActiveAntardasha(activeDasha?.antardasha);
 
   const dashaStr = activeAntar
     ? `${activeDasha?.planet} Mahadasha / ${activeAntar.planet} Antardasha`

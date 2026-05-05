@@ -10,6 +10,7 @@
  */
 
 import { ChartData, DashaPeriod, PlanetPosition } from '@store/userStore';
+import { findActiveDasha, findActiveAntardasha } from '@utils/vedic';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,18 +94,17 @@ const DASHA_THEMES: Record<string, string> = {
   Ketu: 'spiritual deepening and the release of what no longer belongs',
 };
 
-function buildDashaSignal(chart: ChartData): DailySignal | null {
-  const activeDasha = chart.dashas.find(d => d.isActive);
+function buildDashaSignal(chart: ChartData, date: Date): DailySignal | null {
+  const activeDasha = findActiveDasha(chart.dashas, date);
   if (!activeDasha) return null;
 
-  const activeAntar = activeDasha.antardasha?.find(a => a.isActive);
+  const activeAntar = findActiveAntardasha(activeDasha.antardasha, date);
 
   // Check if antardasha just shifted (within 3 days of start)
   let isNew = false;
   if (activeAntar) {
     const antarStart = new Date(activeAntar.startDate);
-    const now = new Date();
-    const daysSinceStart = Math.floor((now.getTime() - antarStart.getTime()) / 86_400_000);
+    const daysSinceStart = Math.floor((date.getTime() - antarStart.getTime()) / 86_400_000);
     isNew = daysSinceStart <= 3;
   }
 
@@ -167,16 +167,15 @@ function buildWeekdaySignal(date: Date): DailySignal {
 
 // ─── Upcoming Signal ───────────────────────────────────────────────────────────
 
-function buildUpcomingSignal(chart: ChartData): DailySignal | null {
-  const activeDasha = chart.dashas.find(d => d.isActive);
+function buildUpcomingSignal(chart: ChartData, date: Date): DailySignal | null {
+  const activeDasha = findActiveDasha(chart.dashas, date);
   if (!activeDasha?.antardasha) return null;
 
-  const activeAntar = activeDasha.antardasha.find(a => a.isActive);
+  const activeAntar = findActiveAntardasha(activeDasha.antardasha, date);
   if (!activeAntar) return null;
 
   const endDate = new Date(activeAntar.endDate);
-  const now = new Date();
-  const daysUntil = Math.floor((endDate.getTime() - now.getTime()) / 86_400_000);
+  const daysUntil = Math.floor((endDate.getTime() - date.getTime()) / 86_400_000);
 
   if (daysUntil > 30 || daysUntil < 0) return null;
 
@@ -199,13 +198,13 @@ export function computeDailySignals(chart: ChartData, date: Date = new Date()): 
   const dateStr = date.toISOString().split('T')[0]!;
   const signals: DailySignal[] = [];
 
-  const dashaSignal = buildDashaSignal(chart);
+  const dashaSignal = buildDashaSignal(chart, date);
   if (dashaSignal) signals.push(dashaSignal);
 
   signals.push(buildMoonSignal(chart, date));
   signals.push(buildWeekdaySignal(date));
 
-  const upcomingSignal = buildUpcomingSignal(chart);
+  const upcomingSignal = buildUpcomingSignal(chart, date);
   if (upcomingSignal) signals.push(upcomingSignal);
 
   // Overall significance = weighted average of top 3 signals
@@ -216,8 +215,8 @@ export function computeDailySignals(chart: ChartData, date: Date = new Date()): 
     : 0.2;
 
   const moon = chart.planets.find(p => p.planet === 'Moon');
-  const activeDasha = chart.dashas.find(d => d.isActive);
-  const activeAntar = activeDasha?.antardasha?.find(a => a.isActive);
+  const activeDasha = findActiveDasha(chart.dashas, date);
+  const activeAntar = findActiveAntardasha(activeDasha?.antardasha, date);
 
   return {
     date: dateStr,

@@ -12,6 +12,7 @@
  */
 
 import { ChartData, PlanetPosition } from '@store/userStore';
+import { findActiveDasha } from '@utils/vedic';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -223,7 +224,7 @@ export function deriveUserPersona(chart: ChartData): UserPersona {
   }
 
   // Active Dasha theme
-  const activeDasha = chart.dashas.find(d => d.isActive);
+  const activeDasha = findActiveDasha(chart.dashas);
   const dashaTheme = activeDasha
     ? DASHA_THEMES[activeDasha.planet] ?? `${activeDasha.planet} Mahadasha — a significant period of karmic unfolding`
     : 'a transitional period between major planetary cycles';

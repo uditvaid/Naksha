@@ -19,6 +19,7 @@ import { GuruMessage } from '@store/userStore';
 import { UserArc, ArcUpdate } from '@lib/persona/arc';
 import { PROXY_BASE_URL } from '@constants/config';
 import { buildAuthHeader } from './auth';
+import { fetchWithTimeout } from './claude';
 
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const EXTRACTION_MODEL = 'claude-haiku-4-5-20251001';
@@ -100,7 +101,7 @@ Extract arc signals from this conversation. Return valid JSON only — no explan
 
   try {
     const authHeader = await buildAuthHeader();
-    const response = await fetch(API_URL, {
+    const response = await fetchWithTimeout(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -112,7 +113,7 @@ Extract arc signals from this conversation. Return valid JSON only — no explan
         system: EXTRACTION_SYSTEM,
         messages: [{ role: 'user', content: userMessage }],
       }),
-    });
+    }, 15000);
 
     if (!response.ok) return EMPTY_UPDATE;
 
@@ -254,7 +255,7 @@ export async function generateArcSummary(
 ): Promise<string> {
   try {
     const authHeader = await buildAuthHeader();
-    const response = await fetch(API_URL, {
+    const response = await fetchWithTimeout(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -266,7 +267,7 @@ export async function generateArcSummary(
         system: `You are a Guru writing a personal reflection for your student. Write in plain, warm, direct prose — no markdown, no bullets. Your voice: ${guruVoice}`,
         messages: [{ role: 'user', content: summaryPrompt }],
       }),
-    });
+    }, 25000);
 
     if (!response.ok) return '';
     const data = await response.json();

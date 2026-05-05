@@ -7,12 +7,16 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initRevenueCat, getCustomerInfo, isPremiumActive, addCustomerInfoListener } from '../src/services/revenuecat';
 import { requestNotificationPermissions, setupAndroidChannel, scheduleDailyInsightNotification } from '../src/services/notifications';
 import { useAppStore } from '../src/store/userStore';
+import { findActiveDasha } from '../src/utils/vedic';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const setPremium = useAppStore(s => s.setPremium);
-  const activeDashaLord = useAppStore(s => s.user.chart?.dashas?.find(d => d.isActive)?.planet);
+  const dashas = useAppStore(s => s.user.chart?.dashas);
+  // Derive active dasha at read time so the daily-insight notification reschedules
+  // when the user crosses a mahadasha boundary even without regenerating the chart.
+  const activeDashaLord = findActiveDasha(dashas)?.planet;
   const [appReady, setAppReady] = useState(false);
   const [notificationsGranted, setNotificationsGranted] = useState(false);
 

@@ -1,14 +1,15 @@
 import { useState, useRef, useCallback, memo, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as ExpoCrypto from 'expo-crypto';
 import { router } from 'expo-router';
-import { useAppStore } from '@store/userStore';
+import { useAppStore, GuruMessage } from '@store/userStore';
 import { useShallow } from 'zustand/react/shallow';
 import { askGuru } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { FREE_GURU_QUESTIONS_PER_DAY } from '@constants/astrology';
+import { findActiveDasha } from '@utils/vedic';
 
 const DASHA_QUESTIONS: Record<string, string[]> = {
   Sun: [
@@ -65,7 +66,7 @@ const FALLBACK_QUESTIONS = [
 ];
 
 function getDashaQuestions(chart: any): { questions: string[]; dashaLord?: string } {
-  const activeDasha = chart?.dashas?.find((d: any) => d.isActive);
+  const activeDasha = findActiveDasha(chart?.dashas);
   if (!activeDasha) return { questions: FALLBACK_QUESTIONS };
   const questions = DASHA_QUESTIONS[activeDasha.planet] ?? FALLBACK_QUESTIONS;
   return { questions, dashaLord: activeDasha.planet };
@@ -98,7 +99,7 @@ export default function GuruScreen() {
   const [loading, setLoading] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<FlatList<GuruMessage>>(null);
 
   // Pre-fill input when arriving from chart screen via "Ask Guru"
   useEffect(() => {
@@ -110,7 +111,7 @@ export default function GuruScreen() {
 
   const questionsLeft = isPremium
     ? '∞'
-    : Math.max(0, FREE_GURU_QUESTIONS_PER_DAY - (lastGuruDate === new Date().toDateString() ? guruQuestionsToday : 0));
+    : Math.max(0, FREE_GURU_QUESTIONS_PER_DAY - (lastGuruDate === new Date().toISOString().split('T')[0] ? guruQuestionsToday : 0));
 
   const sendMessage = useCallback(async (text?: string) => {
     const question = (text ?? input).trim();
@@ -248,27 +249,24 @@ export default function GuruScreen() {
           </View>
         </View>
 
-        <ScrollView
+        <FlatList
           ref={scrollRef}
           style={styles.messagesArea}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 16 }}
-        >
-          {messages.length === 0 ? (
-            <WelcomeState onSelect={sendMessage} {...getDashaQuestions(chart)} />
-          ) : (
-            messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))
-          )}
-
-          {loading && (
+          contentContainerStyle={messages.length === 0 ? styles.messagesEmptyContent : styles.messagesContent}
+          data={messages}
+          keyExtractor={msg => msg.id}
+          renderItem={({ item }) => <MessageBubble message={item} />}
+          ListEmptyComponent={<WelcomeState onSelect={sendMessage} {...getDashaQuestions(chart)} />}
+          ListFooterComponent={loading ? (
             <View style={styles.loadingBubble}>
               <ActivityIndicator size="small" color={Colors.gold} />
               <Text style={styles.loadingText}>The Guru reads the stars…</Text>
             </View>
-          )}
-        </ScrollView>
+          ) : null}
+          initialNumToRender={20}
+          maxToRenderPerBatch={10}
+        />
 
         {/* Paywall nudge */}
         {!isPremium && questionsLeft === 0 && (
@@ -370,6 +368,8 @@ const styles = StyleSheet.create({
   clearBtn: { padding: 4 },
   clearBtnText: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cinzel },
   messagesArea: { flex: 1, paddingHorizontal: Spacing.md },
+  messagesContent: { paddingBottom: 16 },
+  messagesEmptyContent: { paddingBottom: 16, flexGrow: 1 },
   welcome: { paddingTop: Spacing.xl, alignItems: 'center' },
   welcomeIcon: { fontSize: 48, marginBottom: Spacing.sm },
   welcomeTitle: { fontSize: 22, fontFamily: Fonts.cinzel, color: Colors.gold, marginBottom: Spacing.sm },

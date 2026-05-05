@@ -2,11 +2,17 @@ import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzePalm } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
+
+// Cap palm photos at 1024px on the long edge before sending. Modern phone
+// cameras shoot 4032×3024 (~3-7 MB JPEG). Resizing here cuts the base64
+// payload ~5-10× — meaningful on cellular and well under the proxy timeout.
+const MAX_IMAGE_DIMENSION = 1024;
 
 export default function PalmScreen() {
   const { isPremium, birthData } = useAppStore(useShallow(s => ({
@@ -54,17 +60,33 @@ export default function PalmScreen() {
       }
 
       const method = fromCamera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+      // base64 omitted from the picker — we compute it after resize so the
+      // first encode isn't wasted on the full-resolution image.
       const result = await method({
         mediaTypes: ['images'],
-        quality: 0.8,
-        base64: true,
+        quality: 0.9,
         allowsEditing: true,
         aspect: [3, 4],
       });
 
       if (!result.canceled && result.assets[0]) {
-        setImageUri(result.assets[0].uri);
-        setImageBase64(result.assets[0].base64 ?? null);
+        const asset = result.assets[0];
+        const longEdge = Math.max(asset.width ?? 0, asset.height ?? 0);
+        const resized = longEdge > MAX_IMAGE_DIMENSION
+          ? await ImageManipulator.manipulateAsync(
+              asset.uri,
+              [{ resize: asset.width >= asset.height
+                  ? { width: MAX_IMAGE_DIMENSION }
+                  : { height: MAX_IMAGE_DIMENSION } }],
+              { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+            )
+          : await ImageManipulator.manipulateAsync(
+              asset.uri,
+              [],
+              { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+            );
+        setImageUri(resized.uri);
+        setImageBase64(resized.base64 ?? null);
         setReading('');
       }
     } catch {
