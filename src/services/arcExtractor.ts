@@ -19,7 +19,7 @@ import { GuruMessage } from '@store/userStore';
 import { UserArc, ArcUpdate } from '@lib/persona/arc';
 import { PROXY_BASE_URL } from '@constants/config';
 import { buildAuthHeader } from './auth';
-import { fetchWithTimeout } from './claude';
+import { fetchWithTimeout } from './http';
 
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const EXTRACTION_MODEL = 'claude-haiku-4-5-20251001';

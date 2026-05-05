@@ -25,7 +25,7 @@ import { DailyRecord } from '@store/dailyContinuityStore';
 import { checkDailyGuardrails } from '@lib/daily/guardrails';
 import { buildChartContextBlock } from '@lib/persona/chartContext';
 import { deriveUserPersona } from './personaEngine';
-import { fetchWithTimeout } from './claude';
+import { fetchWithTimeout } from './http';
 
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const MODEL = 'claude-sonnet-4-6';

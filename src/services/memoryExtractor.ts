@@ -13,7 +13,7 @@ import { GuruMessage } from '@store/userStore';
 import { UserMemory, MemoryUpdate } from '@lib/persona/memory';
 import { PROXY_BASE_URL } from '@constants/config';
 import { buildAuthHeader } from './auth';
-import { fetchWithTimeout } from './claude';
+import { fetchWithTimeout } from './http';
 
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const MODEL = 'claude-haiku-4-5-20251001';
