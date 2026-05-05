@@ -821,13 +821,30 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: 4 },
   title: { fontSize: 24, fontFamily: Fonts.cinzel, color: Colors.gold },
   subtitle: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 3 },
-  tabsScroll: { borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
-  tabsContainer: { paddingHorizontal: Spacing.md, gap: 8, alignItems: 'center', paddingVertical: 10 },
-  tab: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.cardBorder },
+  tabsScroll: { borderBottomWidth: 1, borderBottomColor: Colors.cardBorder, flexGrow: 0 },
+  tabsContainer: { paddingHorizontal: Spacing.md, gap: 8, alignItems: 'center', paddingVertical: 12 },
+  // Explicit height + flex-center the text. The previous version relied on
+  // paddingVertical to size the tab, but iOS clipped Cinzel's tall ascenders
+  // when fontSize was small. Anchoring the touchable to a known height and
+  // centering the text inside avoids the line-box height-calc that was clipping.
+  tab: {
+    height: 36,
+    paddingHorizontal: 20,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   tabActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
-  // Cinzel has tall caps that get clipped without an explicit lineHeight on iOS;
-  // setting it ≈1.5× fontSize gives the text container enough vertical room.
-  tabText: { fontSize: 12, lineHeight: 18, fontFamily: Fonts.cinzel, color: Colors.muted, letterSpacing: 0.5 },
+  tabText: {
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: Fonts.cinzel,
+    color: Colors.muted,
+    letterSpacing: 1,
+    includeFontPadding: false,
+  },
   tabTextActive: { color: Colors.gold },
   scrollContent: { paddingBottom: 20 },
   section: { padding: Spacing.md },
