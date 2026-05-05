@@ -337,8 +337,10 @@ function buildV2PlanetPayload() {
       { name: 'Jupiter', longitude: 53.6520,  degree: 23.6520, rasi: { id: 1 }, is_retrograde: false, is_exalted: false, is_debilitated: false },
       { name: 'Venus',   longitude: 65.9520,  degree:  5.9520, rasi: { id: 2 }, is_retrograde: false, is_exalted: false, is_debilitated: false },
       { name: 'Saturn',  longitude: 258.8520, degree: 18.8520, rasi: { id: 8 }, is_retrograde: true,  is_exalted: false, is_debilitated: false },
-      { name: 'Rahu',    longitude: 125.9000, degree:  5.9000, rasi: { id: 4 }, is_retrograde: true,  is_exalted: false, is_debilitated: false },
-      { name: 'Ketu',    longitude: 305.9000, degree:  5.9000, rasi: { id: 10 }, is_retrograde: true, is_exalted: false, is_debilitated: false },
+      // v2 API returns nodes in standard Vedic convention (no inversion):
+      // Rahu (north node) at 305.9° Aquarius, Ketu (south node) at 125.9° Leo.
+      { name: 'Rahu',    longitude: 305.9000, degree:  5.9000, rasi: { id: 10 }, is_retrograde: true, is_exalted: false, is_debilitated: false },
+      { name: 'Ketu',    longitude: 125.9000, degree:  5.9000, rasi: { id: 4 },  is_retrograde: true, is_exalted: false, is_debilitated: false },
     ],
   };
 }
@@ -391,6 +393,38 @@ describe('Prokerala v2 API shape — regression for off-by-one sign bug', () => 
       const p = chart.planets.find(x => x.planet === planet)!;
       expect({ planet, sign: p.sign }).toEqual({ planet, sign });
     }
+  });
+
+  // v2 API returns nodes in correct Vedic convention. The legacy swap was
+  // written for the v1/sandbox API which used the inverted convention. If the
+  // swap runs against v2 data, Rahu and Ketu interchange — which silently
+  // inverts every interpretation that depends on which house the nodes occupy.
+  test('Rahu lands in Aquarius (north node, correct Vedic placement)', () => {
+    const rahu = chart.planets.find(p => p.planet === 'Rahu')!;
+    expect(rahu.sign).toBe('Aquarius');
+    expect(rahu.signIndex).toBe(10);
+  });
+
+  test('Ketu lands in Leo (south node, derived as Rahu + 180°)', () => {
+    const ketu = chart.planets.find(p => p.planet === 'Ketu')!;
+    expect(ketu.sign).toBe('Leo');
+    expect(ketu.signIndex).toBe(4);
+  });
+
+  test('Both Rahu and Ketu are flagged retrograde', () => {
+    const rahu = chart.planets.find(p => p.planet === 'Rahu')!;
+    const ketu = chart.planets.find(p => p.planet === 'Ketu')!;
+    expect(rahu.isRetrograde).toBe(true);
+    expect(ketu.isRetrograde).toBe(true);
+  });
+
+  test('NODE_AXIS invariant: Rahu and Ketu are exactly 180° apart', () => {
+    const rahu = chart.planets.find(p => p.planet === 'Rahu')!;
+    const ketu = chart.planets.find(p => p.planet === 'Ketu')!;
+    const rahuLon = rahu.signIndex * 30 + rahu.degree;
+    const ketuLon = ketu.signIndex * 30 + ketu.degree;
+    const diff = Math.abs(((rahuLon + 180) % 360) - ketuLon);
+    expect(diff).toBeLessThan(0.01);
   });
 });
 

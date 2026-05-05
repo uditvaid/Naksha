@@ -408,13 +408,22 @@ export async function generateChart(birthData: BirthData): Promise<ChartData> {
 
   if (rawPlanets.length > 0) {
     planets = rawPlanets.map((p: any) => parsePlanetPosition(p, lagnaSignIndex));
-    // Prokerala API labels South Node as "Rahu" and North Node as "Ketu" —
-    // swap to standard Vedic convention: Rahu = North Node, Ketu = South Node
-    planets = planets.map(p => {
-      if (p.planet === 'Rahu') return { ...p, planet: 'Ketu' };
-      if (p.planet === 'Ketu') return { ...p, planet: 'Rahu' };
-      return p;
-    });
+    // Older Prokerala APIs (v1 / sandbox) labelled the south node "Rahu" and
+    // the north node "Ketu" — inverted from Vedic convention. The v2 / live
+    // API returns nodes correctly labelled. Detect by the planet wire shape:
+    // v2 uses `longitude: <number>`; v1 uses `longitude: { degrees, ... }`.
+    // If the swap runs against v2 data it produces inverted nodes — every
+    // interpretation that depends on which house the nodes occupy flips.
+    const usesInvertedNodeConvention = rawPlanets.some(
+      (p: any) => p.longitude && typeof p.longitude === 'object' && 'degrees' in p.longitude,
+    );
+    if (usesInvertedNodeConvention) {
+      planets = planets.map(p => {
+        if (p.planet === 'Rahu') return { ...p, planet: 'Ketu' };
+        if (p.planet === 'Ketu') return { ...p, planet: 'Rahu' };
+        return p;
+      });
+    }
     // Enforce NODE_AXIS invariant: derive Ketu exactly opposite Rahu (within 0.001°)
     const rahuEntry = planets.find(p => p.planet === 'Rahu');
     if (rahuEntry) {
