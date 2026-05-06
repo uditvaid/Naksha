@@ -107,19 +107,21 @@ export default function ChineseScreen() {
   const saveReading = useAppStore(s => s.saveReading);
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState<'pillars'|'daymaster'|'elements'|'luck'>('pillars');
+  const [activeSection, setActiveSection] = useState<'pillars'|'elements'|'luck'>('pillars');
   // Which pillar is expanded inline below the Four-Pillars row. Defaults to
   // 'day' since the Day Pillar is the most important — gives the user a
   // useful starting view without requiring a tap.
   const [expandedPillar, setExpandedPillar] = useState<'year'|'month'|'day'|'hour'>('day');
   // Independent toggles for the deeper Stem / Branch detail blocks within
-  // the active pillar's detail card. Reset when the user switches pillars
-  // so they always start collapsed at the new level.
-  const [stemExpanded, setStemExpanded] = useState(false);
+  // the active pillar's detail card. Stem auto-expands when the Day pillar
+  // is selected — that block contains the Day Master profile, the most
+  // important content on the screen, so showing it without a tap saves the
+  // user 1-2 interactions to reach what used to be a dedicated tab.
+  const [stemExpanded, setStemExpanded] = useState(true);
   const [branchExpanded, setBranchExpanded] = useState(false);
   const switchPillar = useCallback((p: 'year'|'month'|'day'|'hour') => {
     setExpandedPillar(p);
-    setStemExpanded(false);
+    setStemExpanded(p === 'day'); // auto-expand Stem on Day; collapse on others
     setBranchExpanded(false);
   }, []);
 
@@ -179,7 +181,9 @@ export default function ChineseScreen() {
   const balance    = useMemo(() => getElementBalance(allPillars), [yearPillar, monthPillar, dayPillar, hourPillar]);
   const luckPillars = useMemo(() => getLuckPillars(monthPillar, yearPillar.stemIndex, birthYear), [monthPillar, yearPillar.stemIndex, birthYear]);
 
-  const dayMaster = DAY_MASTER_PROFILES[dayPillar.stem];
+  // Day Master profile is consumed inline by the Heavenly Stem expansion
+  // in the Four Pillars tab; we only need the element data for the hero
+  // chip color here.
   const dayMasterEl = ELEMENT_DATA[dayPillar.stemElement];
 
   // Animal / element info
@@ -263,16 +267,20 @@ export default function ChineseScreen() {
           )}
         </View>
 
-        {/* Section tabs */}
+        {/* Section tabs — Day Master used to live here as its own tab, but
+            its content is the Heavenly Stem profile, which now surfaces
+            inside the Four Pillars tab when the Day pillar is expanded.
+            That expansion is open by default, so the Day Master profile
+            is visible on first paint without a tab switch. */}
         <View style={styles.sectionTabs}>
-          {(['pillars','daymaster','elements','luck'] as const).map(s => (
+          {(['pillars','elements','luck'] as const).map(s => (
             <TouchableOpacity
               key={s}
               style={[styles.sectionTab, activeSection === s && styles.sectionTabActive]}
               onPress={() => setActiveSection(s)}
             >
               <Text style={[styles.sectionTabText, activeSection === s && styles.sectionTabTextActive]}>
-                {s === 'pillars' ? 'Four Pillars' : s === 'daymaster' ? 'Day Master' : s === 'elements' ? 'Five Elements' : 'Luck Pillars'}
+                {s === 'pillars' ? 'Four Pillars' : s === 'elements' ? 'Five Elements' : 'Luck Pillars'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -354,8 +362,19 @@ export default function ChineseScreen() {
                             <Text style={styles.deepBlockText}>{stemProfile.challenge}</Text>
                             <Text style={styles.deepBlockLabel}>SUPPORTIVE ELEMENTS</Text>
                             <Text style={styles.deepBlockText}>
-                              {stemProfile.usefulElements.join(' & ')} energies nourish and balance this stem.
+                              These elements strengthen this stem and bring more ease. Favour their colours, directions, and activities.
                             </Text>
+                            <View style={styles.usefulElemsRow}>
+                              {stemProfile.usefulElements.map(el => {
+                                const ed = ELEMENT_DATA[el];
+                                return (
+                                  <View key={el} style={[styles.usefulElemChip, { borderColor: ed?.color ?? Colors.gold }]}>
+                                    <Text style={[styles.usefulElemChar, { color: ed?.color ?? Colors.gold }]}>{ed?.symbol ?? el[0]}</Text>
+                                    <Text style={[styles.usefulElemText, { color: ed?.color ?? Colors.gold }]}>{el}</Text>
+                                  </View>
+                                );
+                              })}
+                            </View>
                           </View>
                         )}
                       </TouchableOpacity>
@@ -422,55 +441,6 @@ export default function ChineseScreen() {
             </View>
           );
         })()}
-
-        {/* ── Day Master ── */}
-        {activeSection === 'daymaster' && dayMaster && (
-          <View style={styles.section}>
-            <View style={[styles.dayMasterHero, { borderColor: dayMasterEl?.color ?? Colors.gold }]}>
-              <Text style={[styles.dayMasterChar, { color: dayMasterEl?.color ?? Colors.gold }]}>{dayMaster.char}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.dayMasterTitle, { color: dayMasterEl?.color ?? Colors.gold }]}>{dayMaster.title}</Text>
-                <Text style={styles.dayMasterNature}>{dayMaster.nature}</Text>
-              </View>
-            </View>
-
-            <View style={styles.dayMasterCard}>
-              <Text style={styles.dayMasterSectionLabel}>WHO YOU ARE</Text>
-              <Text style={styles.dayMasterText}>{dayMaster.personality}</Text>
-            </View>
-
-            <View style={styles.dayMasterCard}>
-              <Text style={styles.dayMasterSectionLabel}>IN RELATIONSHIPS</Text>
-              <Text style={styles.dayMasterText}>{dayMaster.relationships}</Text>
-            </View>
-
-            <View style={styles.dayMasterCard}>
-              <Text style={styles.dayMasterSectionLabel}>IN WORK & CAREER</Text>
-              <Text style={styles.dayMasterText}>{dayMaster.career}</Text>
-            </View>
-
-            <View style={[styles.dayMasterCard, { borderColor: Colors.amber + '60' }]}>
-              <Text style={[styles.dayMasterSectionLabel, { color: Colors.amber }]}>YOUR GROWTH EDGE</Text>
-              <Text style={styles.dayMasterText}>{dayMaster.challenge}</Text>
-            </View>
-
-            <View style={styles.infoCard}>
-              <Text style={styles.infoTitle}>Elements that support you</Text>
-              <View style={styles.usefulElemsRow}>
-                {dayMaster.usefulElements.map(el => {
-                  const ed = ELEMENT_DATA[el];
-                  return (
-                    <View key={el} style={[styles.usefulElemChip, { borderColor: ed?.color ?? Colors.gold }]}>
-                      <Text style={[styles.usefulElemChar, { color: ed?.color ?? Colors.gold }]}>{ed?.symbol ?? el[0]}</Text>
-                      <Text style={[styles.usefulElemText, { color: ed?.color ?? Colors.gold }]}>{el}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-              <Text style={styles.infoText}>These elements strengthen your Day Master and bring more ease into your life. Favour their colours, directions, and activities.</Text>
-            </View>
-          </View>
-        )}
 
         {/* ── Five Elements ── */}
         {activeSection === 'elements' && (
@@ -704,13 +674,8 @@ const styles = StyleSheet.create({
   deepBlockLabel: { fontSize: 9, letterSpacing: 1.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginTop: 10 },
   deepBlockText: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20, opacity: 0.85 },
 
-  dayMasterHero: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: Colors.card, borderWidth: 1.5, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 12 },
-  dayMasterChar: { fontSize: 48, fontFamily: Fonts.cinzel },
-  dayMasterTitle: { fontSize: 16, fontFamily: Fonts.cinzel, marginBottom: 2 },
-  dayMasterNature: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic },
-  dayMasterCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 10 },
-  dayMasterSectionLabel: { fontSize: 9, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 8 },
-  dayMasterText: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22 },
+  // dayMaster* styles removed — the dedicated Day Master tab was deleted;
+  // its content is now surfaced via the Heavenly Stem expansion in Four Pillars.
   usefulElemsRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   usefulElemChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 6 },
   usefulElemChar: { fontSize: 18 },
