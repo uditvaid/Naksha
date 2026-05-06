@@ -25,7 +25,19 @@ function stripMarkdown(t: string) {
 
 // ─── Pillar Card ──────────────────────────────────────────────────────────────
 
-function PillarCard({ label, pillar, dim }: { label: string; pillar: Pillar | null; dim?: boolean }) {
+function PillarCard({
+  label,
+  pillar,
+  dim,
+  selected,
+  onPress,
+}: {
+  label: string;
+  pillar: Pillar | null;
+  dim?: boolean;
+  selected?: boolean;
+  onPress?: () => void;
+}) {
   if (!pillar) {
     return (
       <View style={[pillarStyles.card, dim && pillarStyles.dim]}>
@@ -40,8 +52,13 @@ function PillarCard({ label, pillar, dim }: { label: string; pillar: Pillar | nu
   const stemEl = ELEMENT_DATA[pillar.stemElement];
   const branchEl = ELEMENT_DATA[pillar.branchElement];
   return (
-    <View style={[pillarStyles.card, dim && pillarStyles.dim]}>
-      <Text style={pillarStyles.label}>{label}</Text>
+    <TouchableOpacity
+      style={[pillarStyles.card, dim && pillarStyles.dim, selected && pillarStyles.cardSelected]}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+      disabled={!onPress}
+    >
+      <Text style={[pillarStyles.label, selected && pillarStyles.labelSelected]}>{label}</Text>
       <Text style={[pillarStyles.char, { color: stemEl?.color ?? Colors.gold }]}>{pillar.stemChar}</Text>
       <Text style={pillarStyles.stem}>{pillar.stem}</Text>
       <Text style={[pillarStyles.char, { color: branchEl?.color ?? Colors.star, fontSize: 20, marginTop: 4 }]}>{pillar.branchChar}</Text>
@@ -50,20 +67,38 @@ function PillarCard({ label, pillar, dim }: { label: string; pillar: Pillar | nu
         <Text style={[pillarStyles.elemDot, { color: stemEl?.color ?? Colors.gold }]}>◆</Text>
         <Text style={[pillarStyles.elemDot, { color: branchEl?.color ?? Colors.star }]}>◆</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 const pillarStyles = StyleSheet.create({
   card: { flex: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 10, alignItems: 'center', gap: 2 },
+  cardSelected: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
   dim: { opacity: 0.55 },
   label: { fontSize: 8, letterSpacing: 1.5, color: Colors.muted, fontFamily: Fonts.cinzel, textTransform: 'uppercase', marginBottom: 4 },
+  labelSelected: { color: Colors.gold },
   char: { fontSize: 26, color: Colors.gold },
   stem: { fontSize: 9, color: Colors.muted, fontFamily: Fonts.cinzel, textAlign: 'center', letterSpacing: 0.3 },
   branch: { fontSize: 11, color: Colors.star, fontFamily: Fonts.cinzel, textAlign: 'center' },
   elemRow: { flexDirection: 'row', gap: 4, marginTop: 4 },
   elemDot: { fontSize: 8 },
 });
+
+// Per-pillar detail content. Each pillar surfaces a different life domain
+// in classical BaZi: Year = ancestry/society/youth, Month = career/parents/
+// adolescence-to-thirties, Day = self/spouse/middle-age, Hour = children/
+// late life. Tapping a pillar reveals its life-area + stem meaning + branch
+// meaning + the interpretation specific to that combination.
+const PILLAR_META: Record<'year'|'month'|'day'|'hour', { label: string; ages: string; domain: string; description: string }> = {
+  year:  { label: 'Year Pillar',  ages: 'Ages 1–15',     domain: 'Ancestry, society, the era you were born into',
+           description: 'The Year Pillar reveals the broad social and ancestral energies you inherited — your relationship with society at large, your early family environment, and the collective karma of your generation.' },
+  month: { label: 'Month Pillar', ages: 'Ages 16–30',    domain: 'Career, parents, social position',
+           description: 'The Month Pillar governs your career potential, your relationship with parents, and how you build your place in the world. It shapes the chapter where you find your professional identity.' },
+  day:   { label: 'Day Pillar',   ages: 'Ages 31–45',    domain: 'Self, spouse, the core of who you are',
+           description: 'The Day Pillar is the most important — its Heavenly Stem is your Day Master, the central element of your entire chart. Everything else is interpreted relative to this. The Earthly Branch reveals patterns in your closest relationships, especially your spouse.' },
+  hour:  { label: 'Hour Pillar',  ages: 'Ages 46+',      domain: 'Children, legacy, late-life mastery',
+           description: 'The Hour Pillar reveals your relationship with children, what you create that outlives you, and the wisdom of your later years. Requires exact birth time to compute accurately.' },
+};
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
@@ -73,6 +108,10 @@ export default function ChineseScreen() {
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeSection, setActiveSection] = useState<'pillars'|'daymaster'|'elements'|'luck'>('pillars');
+  // Which pillar is expanded inline below the Four-Pillars row. Defaults to
+  // 'day' since the Day Pillar is the most important — gives the user a
+  // useful starting view without requiring a tap.
+  const [expandedPillar, setExpandedPillar] = useState<'year'|'month'|'day'|'hour'>('day');
 
   if (!user.isPremium) {
     return (
@@ -180,11 +219,17 @@ export default function ChineseScreen() {
           <Text style={styles.subtitle}>八字命理 · Chinese Destiny Chart</Text>
         </View>
 
-        {/* Animal Hero */}
+        {/* Compact hero — emoji + title + birth + chips on one card with
+            traits inline. Replaces the previous stacked layout that ate
+            ~30% of the first viewport. */}
         <View style={styles.heroCard}>
-          <Text style={styles.animalEmoji}>{animalEmoji}</Text>
-          <Text style={styles.animalName}>{yearPillar.stem} {yearPillar.branch}</Text>
-          <Text style={styles.birthYear}>Born {birthYear}</Text>
+          <View style={styles.heroTopRow}>
+            <Text style={styles.animalEmoji}>{animalEmoji}</Text>
+            <View style={styles.heroTextCol}>
+              <Text style={styles.animalName}>{yearPillar.stem} {yearPillar.branch}</Text>
+              <Text style={styles.birthYear}>Born {birthYear}</Text>
+            </View>
+          </View>
           <View style={styles.heroRow}>
             <View style={[styles.heroBadge, { borderColor: dayMasterEl?.color ?? Colors.gold }]}>
               <Text style={[styles.heroBadgeText, { color: dayMasterEl?.color ?? Colors.gold }]}>
@@ -197,21 +242,16 @@ export default function ChineseScreen() {
               </Text>
             </View>
           </View>
-        </View>
-
-        {/* Core Traits */}
-        {zodiacData && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>CORE TRAITS</Text>
-            <View style={styles.traitsGrid}>
+          {zodiacData && (
+            <View style={styles.heroTraitsRow}>
               {zodiacData.traits.map(t => (
-                <View key={t} style={styles.traitChip}>
-                  <Text style={styles.traitText}>{t}</Text>
+                <View key={t} style={styles.heroTraitChip}>
+                  <Text style={styles.heroTraitText}>{t}</Text>
                 </View>
               ))}
             </View>
-          </View>
-        )}
+          )}
+        </View>
 
         {/* Section tabs */}
         <View style={styles.sectionTabs}>
@@ -229,44 +269,75 @@ export default function ChineseScreen() {
         </View>
 
         {/* ── Four Pillars ── */}
-        {activeSection === 'pillars' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionSubtitle}>
-              Your BaZi chart is built from four pillars — Year, Month, Day, and Hour. Each pillar has a Heavenly Stem (天干) and Earthly Branch (地支), together forming 8 characters that map the energies present at your birth.
-            </Text>
-            <View style={styles.pillarsRow}>
-              <PillarCard label="Year" pillar={yearPillar} />
-              <PillarCard label="Month" pillar={monthPillar} />
-              <PillarCard label="Day" pillar={dayPillar} />
-              <PillarCard label="Hour" pillar={hourPillar} dim={!hourPillar} />
-            </View>
-            {!hourPillar && (
-              <Text style={styles.approxNote}>Hour pillar requires exact birth time. Add yours in settings to complete your chart.</Text>
-            )}
-
-            {/* Year pillar note */}
-            <View style={styles.infoCard}>
-              <Text style={styles.infoTitle}>Your Year Pillar · {yearPillar.stemChar}{yearPillar.branchChar}</Text>
-              <Text style={styles.infoText}>
-                The Year Pillar reveals the broad social and ancestral energies you were born into — your relationship with society, early family environment, and the collective karma you inherited. The {yearPillar.stem} stem brings {ELEMENT_DATA[yearPillar.stemElement]?.keywords.join(', ').toLowerCase() ?? ''}, while the {yearPillar.branch} branch shapes the animal nature of this era.
+        {activeSection === 'pillars' && (() => {
+          const pillarMap = { year: yearPillar, month: monthPillar, day: dayPillar, hour: hourPillar };
+          const active = pillarMap[expandedPillar];
+          const meta = PILLAR_META[expandedPillar];
+          const stemEl = active ? ELEMENT_DATA[active.stemElement] : null;
+          const branchEl = active ? ELEMENT_DATA[active.branchElement] : null;
+          const isDayPillar = expandedPillar === 'day';
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionSubtitle}>
+                Tap any pillar below to see what that domain of your life reveals. Each pillar has a Heavenly Stem (天干) and Earthly Branch (地支), together forming 8 characters that map the energies present at your birth.
               </Text>
-            </View>
+              <View style={styles.pillarsRow}>
+                <PillarCard label="Year"  pillar={yearPillar}  selected={expandedPillar === 'year'}  onPress={() => setExpandedPillar('year')} />
+                <PillarCard label="Month" pillar={monthPillar} selected={expandedPillar === 'month'} onPress={() => setExpandedPillar('month')} />
+                <PillarCard label="Day"   pillar={dayPillar}   selected={expandedPillar === 'day'}   onPress={() => setExpandedPillar('day')} />
+                <PillarCard label="Hour"  pillar={hourPillar}  dim={!hourPillar} selected={expandedPillar === 'hour'} onPress={hourPillar ? () => setExpandedPillar('hour') : undefined} />
+              </View>
+              {!hourPillar && expandedPillar !== 'hour' && (
+                <Text style={styles.approxNote}>Hour pillar requires exact birth time. Add yours in settings to complete your chart.</Text>
+              )}
 
-            <View style={styles.infoCard}>
-              <Text style={styles.infoTitle}>Your Month Pillar · {monthPillar.stemChar}{monthPillar.branchChar}</Text>
-              <Text style={styles.infoText}>
-                The Month Pillar governs your career potential, social relationships, and the chapter of life between ages 16–30. It reveals how you naturally build and achieve in the world. The {monthPillar.stem} energy shapes your professional character.
-              </Text>
-            </View>
+              {/* Inline detail for the selected pillar */}
+              {active && (
+                <View style={[
+                  styles.pillarDetailCard,
+                  isDayPillar && { borderColor: stemEl?.color ?? Colors.gold, borderWidth: 1.5 },
+                ]}>
+                  <Text style={[styles.pillarDetailTitle, isDayPillar && { color: stemEl?.color ?? Colors.gold }]}>
+                    {meta.label} · {active.stemChar}{active.branchChar}{isDayPillar ? ' — The Most Important' : ''}
+                  </Text>
+                  <Text style={styles.pillarDetailMeta}>{meta.ages} · {meta.domain}</Text>
+                  <Text style={styles.pillarDetailText}>{meta.description}</Text>
 
-            <View style={[styles.infoCard, { borderColor: dayMasterEl?.color ?? Colors.gold, borderWidth: 1.5 }]}>
-              <Text style={[styles.infoTitle, { color: dayMasterEl?.color ?? Colors.gold }]}>Your Day Pillar · {dayPillar.stemChar}{dayPillar.branchChar} — The Most Important</Text>
-              <Text style={styles.infoText}>
-                The Day Pillar's Heavenly Stem is your Day Master — the central element of your entire chart, representing your self, your core identity, and how you engage with the world. Everything else in your chart is interpreted relative to this: {dayPillar.stem} ({dayPillar.stemChar}).
-              </Text>
+                  <View style={styles.pillarDetailDivider} />
+
+                  <View style={styles.pillarDetailBlock}>
+                    <Text style={[styles.pillarDetailBlockLabel, { color: stemEl?.color ?? Colors.gold }]}>
+                      {active.stemChar} HEAVENLY STEM · {active.stem.toUpperCase()}
+                    </Text>
+                    <Text style={styles.pillarDetailBlockText}>
+                      {stemEl?.label ?? active.stemElement} energy — {stemEl?.keywords.join(', ').toLowerCase() ?? ''}.
+                      {isDayPillar
+                        ? ' This is your Day Master: the central element through which everything else in your chart is read.'
+                        : ` Shapes how you express ${meta.domain.split(',')[0]!.toLowerCase()} in this domain.`}
+                    </Text>
+                  </View>
+
+                  <View style={styles.pillarDetailBlock}>
+                    <Text style={[styles.pillarDetailBlockLabel, { color: branchEl?.color ?? Colors.star }]}>
+                      {active.branchChar} EARTHLY BRANCH · {active.branch.toUpperCase()}
+                    </Text>
+                    <Text style={styles.pillarDetailBlockText}>
+                      {branchEl?.label ?? active.branchElement} energy — {branchEl?.keywords.join(', ').toLowerCase() ?? ''}.
+                      {' '}The {active.branch} brings the animal nature of this pillar, colouring how the stem's energy plays out over time.
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {!active && expandedPillar === 'hour' && (
+                <View style={styles.pillarDetailCard}>
+                  <Text style={styles.pillarDetailTitle}>{PILLAR_META.hour.label}</Text>
+                  <Text style={styles.pillarDetailMeta}>{PILLAR_META.hour.ages} · {PILLAR_META.hour.domain}</Text>
+                  <Text style={styles.pillarDetailText}>{PILLAR_META.hour.description}</Text>
+                </View>
+              )}
             </View>
-          </View>
-        )}
+          );
+        })()}
 
         {/* ── Day Master ── */}
         {activeSection === 'daymaster' && dayMaster && (
@@ -501,13 +572,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontFamily: Fonts.cinzel, color: Colors.gold },
   subtitle: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 2 },
 
-  heroCard: { margin: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.xl, alignItems: 'center', gap: 8 },
-  animalEmoji: { fontSize: 64 },
-  animalName: { fontSize: 22, fontFamily: Fonts.cinzel, color: Colors.gold },
-  birthYear: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cormorant },
-  heroRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  heroBadge: { borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 5 },
+  heroCard: { margin: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.md, gap: 10 },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  heroTextCol: { flex: 1, gap: 2 },
+  animalEmoji: { fontSize: 40 },
+  animalName: { fontSize: 20, fontFamily: Fonts.cinzel, color: Colors.gold },
+  birthYear: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorant },
+  heroRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  heroBadge: { borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },
   heroBadgeText: { fontSize: 11, fontFamily: Fonts.cinzel, letterSpacing: 0.5 },
+  heroTraitsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  heroTraitChip: { backgroundColor: Colors.goldDim, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 3 },
+  heroTraitText: { fontSize: 11, color: Colors.star, fontFamily: Fonts.crimson, opacity: 0.85 },
 
   section: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
   sectionTitle: { fontSize: 10, letterSpacing: 2, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 10 },
@@ -529,6 +605,14 @@ const styles = StyleSheet.create({
   infoCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 10 },
   infoTitle: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.gold, marginBottom: 8 },
   infoText: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 21 },
+  pillarDetailCard: { marginTop: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
+  pillarDetailTitle: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.gold, marginBottom: 4, letterSpacing: 0.3 },
+  pillarDetailMeta: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginBottom: 12, letterSpacing: 0.3 },
+  pillarDetailText: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, opacity: 0.9 },
+  pillarDetailDivider: { height: 1, backgroundColor: Colors.cardBorder, marginVertical: 14 },
+  pillarDetailBlock: { marginBottom: 12 },
+  pillarDetailBlockLabel: { fontSize: 10, letterSpacing: 1.5, fontFamily: Fonts.cinzel, marginBottom: 6 },
+  pillarDetailBlockText: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20, opacity: 0.85 },
 
   dayMasterHero: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: Colors.card, borderWidth: 1.5, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 12 },
   dayMasterChar: { fontSize: 48, fontFamily: Fonts.cinzel },
