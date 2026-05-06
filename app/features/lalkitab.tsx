@@ -280,8 +280,11 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontFamily: Fonts.cinzel, color: Colors.gold },
   subtitle: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 2 },
   intro: { marginHorizontal: Spacing.md, marginBottom: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
-  introText: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 22 },
-  disclaimer: { fontSize: 11, color: Colors.mutedDark, fontFamily: Fonts.cormorantItalic, lineHeight: 17, marginHorizontal: Spacing.md, marginBottom: Spacing.md },
+  // Bumped contrast on prose blocks — the previous Colors.muted (45% alpha)
+  // and Colors.mutedDark (25% alpha) on the dark card background was hard to
+  // read on iOS at the actual rendered size. star + muted reads cleanly.
+  introText: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 23 },
+  disclaimer: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, lineHeight: 18, marginHorizontal: Spacing.md, marginBottom: Spacing.md },
   planetSection: { marginBottom: Spacing.md },
   sectionTitle: { fontSize: 10, letterSpacing: 2, color: Colors.muted, fontFamily: Fonts.cinzel, paddingHorizontal: Spacing.md, marginBottom: 10 },
   planetScroll: { paddingHorizontal: Spacing.md },
@@ -306,7 +309,7 @@ const styles = StyleSheet.create({
   weekRowHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   weekRowPlanet: { fontSize: 14, fontFamily: Fonts.cinzel, letterSpacing: 0.5 },
   weekRowTodayLabel: { fontSize: 9, letterSpacing: 1.5, color: Colors.gold, fontFamily: Fonts.cinzel, backgroundColor: Colors.goldDim, paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm },
-  weekRowLead: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 17 },
+  weekRowLead: { fontSize: 12, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 17, opacity: 0.85 },
   readingBtn: { marginHorizontal: Spacing.md, backgroundColor: Colors.gold, borderRadius: Radius.lg, padding: 16, alignItems: 'center', marginBottom: Spacing.md },
   readingBtnText: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5, textAlign: 'center' },
   loadingState: { padding: Spacing.xl, alignItems: 'center', gap: 16 },
