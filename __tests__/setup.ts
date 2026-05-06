@@ -1,3 +1,33 @@
+// When LIVE_API=1, load secrets from .env into process.env so the
+// "Live proxy" suite in prokerala.test.ts can read the real PROXY_BASE_URL
+// and APP_HMAC_SECRET. Without this the file-level jest.mock of
+// @constants/config points fetch at https://mock-proxy.test (a dead URL),
+// the request fails, and the suite silently falls into approximate-mode
+// fallback instead of hitting Cloudflare. We parse .env inline rather than
+// pulling in `dotenv` as a dev dep.
+if (process.env.LIVE_API === '1') {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const envPath = path.resolve(__dirname, '..', '.env');
+    if (fs.existsSync(envPath)) {
+      const raw = fs.readFileSync(envPath, 'utf8');
+      for (const line of raw.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eq = trimmed.indexOf('=');
+        if (eq < 0) continue;
+        const key = trimmed.slice(0, eq).trim();
+        const value = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '');
+        if (!process.env[key]) process.env[key] = value;
+      }
+    }
+  } catch {
+    // .env missing or unreadable — live tests will fail loudly when the
+    // mock factory below evaluates and finds empty strings.
+  }
+}
+
 // Mock RN/Expo modules that can't run in Node
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(() => Promise.resolve(null)),

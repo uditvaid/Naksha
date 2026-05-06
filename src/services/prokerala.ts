@@ -392,15 +392,30 @@ export async function generateChart(birthData: BirthData): Promise<ChartData> {
     prokeralaGet('planet-position', baseParams).catch((e) => { if (__DEV__) console.warn('[Prokerala] planet-position failed:', e?.message); return null; }),
   ]);
 
-  // Parse lagna
-  const lagnaSignIndex = kundliData?.ascendant?.rasi?.id != null
-    ? kundliData.ascendant.rasi.id - 1
-    : computeFallbackLagnaSignIndex(birthData);
+  // The v2 planet-position endpoint returns the ascendant alongside the
+  // grahas in planet_position[]. Pull it out (it's a more accurate source
+  // than computeFallbackLagnaSignIndex), then drop it from the planet list
+  // so chart.planets stays at the canonical 9 grahas.
+  const allRaw = planetData?.planet_position ?? kundliData?.planet_positions ?? [];
+  const rawAscendant = allRaw.find((p: any) =>
+    typeof p?.name === 'string' && /^ascendant$/i.test(p.name),
+  );
+  const rawPlanets = allRaw.filter((p: any) => p !== rawAscendant);
+
+  // Parse lagna — prefer planet-position's Ascendant (v2), then kundli's
+  // ascendant block (v1), then a local fallback computation.
+  let lagnaSignIndex: number;
+  if (rawAscendant && typeof rawAscendant.longitude === 'number') {
+    lagnaSignIndex = Math.floor(rawAscendant.longitude / 30) % 12;
+  } else if (kundliData?.ascendant?.rasi?.id != null) {
+    lagnaSignIndex = kundliData.ascendant.rasi.id - 1;
+  } else {
+    lagnaSignIndex = computeFallbackLagnaSignIndex(birthData);
+  }
   const lagna = SIGNS[lagnaSignIndex] ?? 'Libra';
 
   // Parse planets
   let planets: PlanetPosition[] = [];
-  const rawPlanets = planetData?.planet_position ?? kundliData?.planet_positions ?? [];
 
   if (__DEV__) {
     console.log('[Prokerala] raw planet array:', JSON.stringify(rawPlanets, null, 2));

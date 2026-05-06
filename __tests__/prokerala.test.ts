@@ -18,14 +18,26 @@ import fixtures from './fixtures/chart_fixtures.json';
 
 // ─── Mock dependencies (hoisted before imports) ───────────────────────────────
 
-jest.mock('@constants/config', () => ({
-  PROXY_BASE_URL: 'https://mock-proxy.test',
-  APP_HMAC_SECRET: 'test-secret',
-  TEST_MODE: false,
-  BUILD_PROFILE: 'test',
-  REVENUECAT_IOS_KEY: '',
-  REVENUECAT_ANDROID_KEY: '',
-}));
+// When LIVE_API=1 is set, the suite at the bottom of this file runs
+// generateChart against the real Cloudflare Worker → Prokerala chain.
+// Read the real PROXY_BASE_URL + APP_HMAC_SECRET from process.env (loaded
+// by __tests__/setup.ts from .env). Otherwise stub them so unit tests
+// stay hermetic and don't accidentally reach the network.
+//
+// jest.mock factories are hoisted to the top of the file, so we read
+// process.env inline rather than referencing a top-level const (which
+// would hit the TDZ on hoist).
+jest.mock('@constants/config', () => {
+  const live = process.env.LIVE_API === '1';
+  return {
+    PROXY_BASE_URL: live ? (process.env.PROXY_BASE_URL || '') : 'https://mock-proxy.test',
+    APP_HMAC_SECRET: live ? (process.env.APP_HMAC_SECRET || '') : 'test-secret',
+    TEST_MODE: false,
+    BUILD_PROFILE: 'test',
+    REVENUECAT_IOS_KEY: '',
+    REVENUECAT_ANDROID_KEY: '',
+  };
+});
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(() => Promise.resolve('test-device-id')),
