@@ -98,6 +98,14 @@ function buildFakeKundliPayload() {
   };
 }
 
+// Capture the real fetch at module load, before any suite installs a mock.
+// The live-proxy suite restores this in its beforeAll so that running with
+// `LIVE_API=1` against the full file (not just the matching test) doesn't
+// inherit a stale jest.fn() left over from earlier suites — which would
+// silently fall back to approximate-mode and turn the live tests green
+// against fake data.
+const REAL_FETCH = global.fetch;
+
 function makeFetchMock() {
   return jest.fn()
     .mockImplementationOnce(() => Promise.resolve({
@@ -449,7 +457,14 @@ liveDescribe('Live proxy — generateChart real API call (LIVE_API=1)', () => {
   jest.setTimeout(30000);
   let chart: Awaited<ReturnType<typeof generateChart>>;
 
-  beforeAll(async () => { chart = await generateChart(BIRTH_DATA as any); });
+  beforeAll(async () => {
+    // Restore the real fetch — earlier suites in this file install jest.fn()
+    // mocks and clean them up with jest.resetAllMocks(), which leaves the
+    // mock function in place but resets its state. Without this restore the
+    // live suite would call a stale (empty) mock instead of the network.
+    global.fetch = REAL_FETCH as any;
+    chart = await generateChart(BIRTH_DATA as any);
+  });
 
   test('9 planets returned', () => { expect(chart.planets).toHaveLength(9); });
   test('lagna is Libra', () => { expect(chart.lagna).toBe('Libra'); });
