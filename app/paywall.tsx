@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -118,11 +118,30 @@ export default function PaywallScreen() {
     }
   };
 
-  const tiers = [
-    { key: 'threeMonth', ...PRICING.threeMonth },
-    { key: 'annual', ...PRICING.annual },
-    { key: 'lifetime', ...PRICING.lifetime },
-  ] as const;
+  // Only show tiers that have a matching RevenueCat package. If we render a
+  // tier without a backing package, tapping the card silently keeps the
+  // previously-selected (different) package and the user pays the wrong
+  // amount. This guard makes the UI honest while a new product is mid-rollout.
+  const tiers = useMemo(() => {
+    const all = [
+      { key: 'threeMonth' as const, ...PRICING.threeMonth },
+      { key: 'annual' as const, ...PRICING.annual },
+      { key: 'lifetime' as const, ...PRICING.lifetime },
+    ];
+    return all.filter(t => findPackageForTier(packages, t.key) !== undefined);
+  }, [packages]);
+
+  // If the currently-selected tier got filtered out (e.g. RevenueCat is mid-
+  // rollout and removed a product), fall back to the first available tier
+  // so the highlighted card always matches selectedPkg.
+  useEffect(() => {
+    if (tiers.length > 0 && !tiers.some(t => t.key === selectedTier)) {
+      const fallback = tiers[0]!;
+      setSelectedTier(fallback.key);
+      const pkg = findPackageForTier(packages, fallback.key);
+      if (pkg) setSelectedPkg(pkg);
+    }
+  }, [tiers, selectedTier, packages]);
 
   if (loading) {
     return (
