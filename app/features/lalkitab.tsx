@@ -155,16 +155,72 @@ export default function LalKitabScreen() {
           </ScrollView>
         </View>
 
-        {/* Quick remedies — today's planetary ruler when no planet picked,
-            or the user's pick when one is. Show all 5 remedies for the
-            selected planet (they're short tactical actions). */}
+        {/* Today's focus card — always shown when no specific planet is
+            picked. Surfaces today's weekday ruler with its full remedy list
+            so the user knows what to act on right now. */}
+        {!selectedPlanet && (
+          <View style={styles.remediesSection}>
+            <Text style={styles.sectionTitle}>
+              TODAY · {todayName.toUpperCase()} · {todayPlanet.toUpperCase()}
+            </Text>
+            <View style={styles.planetRemediesCard}>
+              <View style={styles.planetRemediesHeader}>
+                <View style={[styles.planetIconWrap, { backgroundColor: PLANET_COLORS[todayPlanet] + '20' }]}>
+                  <Text style={[styles.planetIcon, { color: PLANET_COLORS[todayPlanet] }]}>{PLANET_SYMBOLS[todayPlanet]}</Text>
+                </View>
+                <Text style={[styles.planetRemediesTitle, { color: PLANET_COLORS[todayPlanet] }]}>{todayPlanet}</Text>
+              </View>
+              {LAL_KITAB_REMEDIES[todayPlanet]?.map((remedy, i) => (
+                <View key={i} style={styles.remedyRow}>
+                  <Text style={styles.remedyDot}>◈</Text>
+                  <Text style={styles.remedyText}>{remedy}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Weekly overview — calendar of the 7 weekdays, each tied to its
+            Lal Kitab planetary ruler with one lead remedy. Today's row is
+            highlighted. Tap any row to drill into that planet's full list. */}
+        {!selectedPlanet && (
+          <View style={styles.remediesSection}>
+            <Text style={styles.sectionTitle}>THIS WEEK · DAY-BY-DAY REMEDIES</Text>
+            {WEEKDAY_PLANETS.map((planet, idx) => {
+              const isToday = idx === new Date(nowTick).getDay();
+              const lead = LAL_KITAB_REMEDIES[planet]?.[0] ?? '';
+              return (
+                <TouchableOpacity
+                  key={planet}
+                  style={[styles.weekRow, isToday && styles.weekRowToday]}
+                  onPress={() => setSelectedPlanet(planet)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.weekDayBadge, isToday && { backgroundColor: PLANET_COLORS[planet] + '30', borderColor: PLANET_COLORS[planet] }]}>
+                    <Text style={[styles.weekDayBadgeText, isToday && { color: PLANET_COLORS[planet] }]}>{WEEKDAY_NAMES[idx]!.slice(0, 3).toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.weekRowBody}>
+                    <View style={styles.weekRowHeader}>
+                      <Text style={[styles.weekRowPlanet, { color: PLANET_COLORS[planet] }]}>
+                        {PLANET_SYMBOLS[planet]} {planet}
+                      </Text>
+                      {isToday && <Text style={styles.weekRowTodayLabel}>TODAY</Text>}
+                    </View>
+                    <Text style={styles.weekRowLead} numberOfLines={2}>{lead}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* All-planet remedies — full list for every graha when nothing is
+            picked, or the chosen planet only when a chip is selected. */}
         <View style={styles.remediesSection}>
           <Text style={styles.sectionTitle}>
-            {selectedPlanet
-              ? `${selectedPlanet.toUpperCase()} REMEDIES`
-              : `${todayName.toUpperCase()} · ${todayPlanet.toUpperCase()} REMEDIES`}
+            {selectedPlanet ? `${selectedPlanet.toUpperCase()} REMEDIES` : 'ALL REMEDIES'}
           </Text>
-          {[selectedPlanet ?? todayPlanet].map(planet => (
+          {(selectedPlanet ? [selectedPlanet] : Object.keys(LAL_KITAB_REMEDIES)).map(planet => (
             <View key={planet} style={styles.planetRemediesCard}>
               <View style={styles.planetRemediesHeader}>
                 <View style={[styles.planetIconWrap, { backgroundColor: PLANET_COLORS[planet] + '20' }]}>
@@ -242,6 +298,15 @@ const styles = StyleSheet.create({
   remedyRow: { flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'flex-start' },
   remedyDot: { fontSize: 12, color: Colors.gold, marginTop: 3 },
   remedyText: { flex: 1, fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20 },
+  weekRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md },
+  weekRowToday: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
+  weekDayBadge: { width: 48, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: Radius.sm, backgroundColor: Colors.midnight, borderWidth: 1, borderColor: Colors.cardBorder },
+  weekDayBadgeText: { fontSize: 10, letterSpacing: 1, color: Colors.muted, fontFamily: Fonts.cinzel },
+  weekRowBody: { flex: 1, gap: 4 },
+  weekRowHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  weekRowPlanet: { fontSize: 14, fontFamily: Fonts.cinzel, letterSpacing: 0.5 },
+  weekRowTodayLabel: { fontSize: 9, letterSpacing: 1.5, color: Colors.gold, fontFamily: Fonts.cinzel, backgroundColor: Colors.goldDim, paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm },
+  weekRowLead: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 17 },
   readingBtn: { marginHorizontal: Spacing.md, backgroundColor: Colors.gold, borderRadius: Radius.lg, padding: 16, alignItems: 'center', marginBottom: Spacing.md },
   readingBtnText: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5, textAlign: 'center' },
   loadingState: { padding: Spacing.xl, alignItems: 'center', gap: 16 },
