@@ -74,10 +74,17 @@ export default function HomeScreen() {
 
   const addDaily = useDailyContinuityStore(s => s.addDaily);
   const dailyRecords = useDailyContinuityStore(s => s.dailyRecords);
+  // `nowTick` bumps on focus so date/time-derived values refresh after the user
+  // returns to this tab post-midnight without keeping the screen rerendering.
+  // Declared up here (rather than near the other time-derived memos) because
+  // recentRecords below also needs it — `todayIso` would otherwise stay frozen
+  // at the date when dailyRecords last changed, briefly hiding yesterday's
+  // reading from the archive after a midnight boundary.
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const recentRecords = useMemo(() => {
     const todayIso = new Date().toISOString().split('T')[0]!;
     return dailyRecords.filter(r => r.date !== todayIso).slice(0, 7);
-  }, [dailyRecords]);
+  }, [dailyRecords, nowTick]);
 
   useEffect(() => {
     if (birthData && !aiDisclosureAcknowledged) {
@@ -91,9 +98,6 @@ export default function HomeScreen() {
 
   const chartPlanets = chart?.planets;
   const chartDashas = chart?.dashas;
-  // `nowTick` bumps on focus so date/time-derived values refresh after the user
-  // returns to this tab post-midnight without keeping the screen rerendering.
-  const [nowTick, setNowTick] = useState(() => Date.now());
   const chartDerived = useMemo(() => {
     const planets = chartPlanets ?? [];
     return {
