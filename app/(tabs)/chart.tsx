@@ -620,14 +620,12 @@ export default function ChartScreen() {
                     : <Text style={styles.refreshChartBtnText}>↻ Refresh Chart</Text>
                   }
                 </TouchableOpacity>
-                {!user.chart.isApproximate
-                  ? <Text style={styles.methodologyBadge}>Swiss Ephemeris · Lahiri Ayanamsha · Whole Sign Houses</Text>
-                  : showApproxNotice
-                    ? <TouchableOpacity onPress={refreshChart} style={styles.approxNoticeRow}>
-                        <Text style={styles.approxNoticeText}>Positions estimated — live data unavailable. Tap to retry.</Text>
-                      </TouchableOpacity>
-                    : null
-                }
+                {!user.chart.isApproximate && (
+                  <Text style={styles.methodologyBadge}>Swiss Ephemeris · Lahiri Ayanamsha · Whole Sign Houses</Text>
+                )}
+                {/* Approx-mode retry CTA lives in the global banner above the
+                    tab bar (visible across all tabs). The inner duplicate that
+                    used to render here was removed. */}
               </>
             ) : (
               <View style={styles.noChartState}>
@@ -860,8 +858,6 @@ const styles = StyleSheet.create({
   setupBtn: { backgroundColor: Colors.gold, borderRadius: Radius.lg, paddingHorizontal: 24, paddingVertical: 12 },
   setupBtnText: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.midnight },
   methodologyBadge: { fontSize: 10, color: Colors.mutedDark, fontFamily: Fonts.cormorantItalic, textAlign: 'center', marginTop: 8, letterSpacing: 0.5 },
-  approxNoticeRow: { marginTop: 8, alignSelf: 'center' },
-  approxNoticeText: { fontSize: 11, color: Colors.amber, fontFamily: Fonts.cormorantItalic, textAlign: 'center', textDecorationLine: 'underline' },
   approxBanner: { backgroundColor: Colors.goldDim, borderBottomWidth: 1, borderBottomColor: Colors.gold, paddingVertical: 8, paddingHorizontal: Spacing.md },
   approxBannerText: { fontSize: 12, lineHeight: 18, color: Colors.amber, fontFamily: Fonts.cormorantItalic, textAlign: 'center' },
 
