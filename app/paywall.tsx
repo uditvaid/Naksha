@@ -159,7 +159,11 @@ export default function PaywallScreen() {
     );
   }
 
-  if (!loading && packages.length === 0) {
+  // No packages at all → App Store unreachable.
+  // Packages exist but none match our 3 known tiers (3-month / annual /
+  // lifetime) → offering misconfigured server-side. Either way, bail to the
+  // unavailable screen rather than render a Subscribe button with no cards.
+  if (!loading && (packages.length === 0 || tiers.length === 0)) {
     return (
       <SafeAreaView style={styles.container}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
