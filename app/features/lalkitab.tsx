@@ -7,6 +7,19 @@ import { getLalKitabReading } from '@services/claude';
 import { LAL_KITAB_REMEDIES } from '@constants/astrology';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 
+// Strip light markdown defensively. Haiku tends to emit `## headers` and
+// `**bold**` in prose readings even when the system prompt asks for flowing
+// prose; we render text as-is so the literal characters would otherwise show.
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .trim();
+}
+
 const PLANET_COLORS: Record<string, string> = {
   Sun: '#F59E0B', Moon: '#CBD5E1', Mars: '#EF4444',
   Mercury: '#10B981', Jupiter: '#F59E0B', Venus: '#EC4899',
@@ -37,7 +50,8 @@ export default function LalKitabScreen() {
     setLoading(true);
     setError('');
     try {
-      const result = await getLalKitabReading(user.birthData, user.chart, selectedPlanet ?? undefined);
+      const raw = await getLalKitabReading(user.birthData, user.chart, selectedPlanet ?? undefined);
+      const result = stripMarkdown(raw);
       setReading(result);
       saveReading({
         type: 'lalkitab',

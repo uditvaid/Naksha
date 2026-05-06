@@ -28,6 +28,10 @@ import { detectTopics } from '@lib/persona/telemetry';
 
 const API_URL = `${PROXY_BASE_URL}/v1/anthropic/messages`;
 const MODEL = 'claude-sonnet-4-6';
+// Faster model for "list + remedy" style readings where reasoning depth
+// isn't required. Sonnet 4.6 takes ~30-35s for 1300 tokens which exceeds
+// our request timeout; Haiku 4.5 typically returns the same shape in ~5-10s.
+const FAST_MODEL = 'claude-haiku-4-5-20251001';
 const REQUEST_TIMEOUT_MS = 30000;
 // Palm reading uploads a base64 JPEG (typically 3–7 MB after expo-image-picker
 // compresses at quality 0.8). On cellular this can take well over 30s for the
@@ -54,6 +58,9 @@ async function callClaude(
   // the prefix bytes for 5 minutes; subsequent calls with the same prefix pay
   // ~10% of the input-token cost on cache hits.
   cacheableSystemPrefix?: string,
+  // Override the default Sonnet model. Used by readings that don't need
+  // Sonnet's reasoning depth (Lal Kitab remedies, future fast paths).
+  model: string = MODEL,
 ): Promise<string> {
   const authHeader = await buildAuthHeader();
 
@@ -70,7 +77,7 @@ async function callClaude(
       'Content-Type': 'application/json',
       'x-naksha-auth': authHeader,
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system: systemPayload, messages }),
+    body: JSON.stringify({ model, max_tokens: maxTokens, system: systemPayload, messages }),
   }, REQUEST_TIMEOUT_MS);
 
   if (!response.ok) {
@@ -431,8 +438,13 @@ export async function getLalKitabReading(
       ).join('; ')}`
     : 'Chart not yet fully calculated';
 
-  const system = `You are a warm, practical spiritual guide sharing wisdom from an ancient Indian astrological tradition focused on simple, everyday actions that help bring more harmony into a person's life. Write in plain, simple English. No jargon. Describe what things mean in human terms. Focus on what the person can actually DO — simple, achievable practices rooted in the tradition. Be encouraging and warm. Flowing prose only.`;
+  const system = `You are a warm, practical spiritual guide sharing wisdom from an ancient Indian astrological tradition focused on simple, everyday actions that help bring more harmony into a person's life. Write in plain, simple English. No jargon. Describe what things mean in human terms. Focus on what the person can actually DO — simple, achievable practices rooted in the tradition. Be encouraging and warm. Flowing prose only — absolutely no markdown formatting (no #, ##, ### headers; no **bold**; no bullet points; no horizontal rules). Plain paragraphs separated by blank lines.`;
 
+  // Lal Kitab readings are a list of practical remedies + a brief reflection —
+  // no deep reasoning chain needed. Use Haiku (faster, ~5-10s vs Sonnet's
+  // ~30-35s) and a tighter token budget. Sonnet at 1300 tokens was exceeding
+  // REQUEST_TIMEOUT_MS, causing users to see a timeout error instead of the
+  // reading.
   return callClaude(system, [{
     role: 'user',
     content: `Share a personalised reading for ${birthData.name}, born ${formatDate(birthData.dateOfBirth)} at ${birthData.timeOfBirth} in ${birthData.placeOfBirth}.
@@ -441,7 +453,7 @@ Chart: ${chartInfo}
 ${focusPlanet ? `\nFocus especially on: ${focusPlanet}.` : ''}
 
 Write in plain, warm English. Share: which areas of their life are flowing easily right now and which feel blocked or heavy; the most helpful simple practices they can start doing immediately to bring more ease and harmony — make these specific, practical, and easy to do in everyday life; which part of their life will benefit most from these small changes; and a closing reflection on what this particular moment in their life is here to teach them. Avoid all jargon. Speak like a caring, wise friend.`,
-  }], 1300);
+  }], 900, undefined, FAST_MODEL);
 }
 
 // ─── Compatibility ────────────────────────────────────────────────────────────
