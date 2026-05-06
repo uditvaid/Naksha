@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -112,6 +112,16 @@ export default function ChineseScreen() {
   // 'day' since the Day Pillar is the most important — gives the user a
   // useful starting view without requiring a tap.
   const [expandedPillar, setExpandedPillar] = useState<'year'|'month'|'day'|'hour'>('day');
+  // Independent toggles for the deeper Stem / Branch detail blocks within
+  // the active pillar's detail card. Reset when the user switches pillars
+  // so they always start collapsed at the new level.
+  const [stemExpanded, setStemExpanded] = useState(false);
+  const [branchExpanded, setBranchExpanded] = useState(false);
+  const switchPillar = useCallback((p: 'year'|'month'|'day'|'hour') => {
+    setExpandedPillar(p);
+    setStemExpanded(false);
+    setBranchExpanded(false);
+  }, []);
 
   if (!user.isPremium) {
     return (
@@ -282,10 +292,10 @@ export default function ChineseScreen() {
                 Tap any pillar below to see what that domain of your life reveals. Each pillar has a Heavenly Stem (天干) and Earthly Branch (地支), together forming 8 characters that map the energies present at your birth.
               </Text>
               <View style={styles.pillarsRow}>
-                <PillarCard label="Year"  pillar={yearPillar}  selected={expandedPillar === 'year'}  onPress={() => setExpandedPillar('year')} />
-                <PillarCard label="Month" pillar={monthPillar} selected={expandedPillar === 'month'} onPress={() => setExpandedPillar('month')} />
-                <PillarCard label="Day"   pillar={dayPillar}   selected={expandedPillar === 'day'}   onPress={() => setExpandedPillar('day')} />
-                <PillarCard label="Hour"  pillar={hourPillar}  dim={!hourPillar} selected={expandedPillar === 'hour'} onPress={hourPillar ? () => setExpandedPillar('hour') : undefined} />
+                <PillarCard label="Year"  pillar={yearPillar}  selected={expandedPillar === 'year'}  onPress={() => switchPillar('year')} />
+                <PillarCard label="Month" pillar={monthPillar} selected={expandedPillar === 'month'} onPress={() => switchPillar('month')} />
+                <PillarCard label="Day"   pillar={dayPillar}   selected={expandedPillar === 'day'}   onPress={() => switchPillar('day')} />
+                <PillarCard label="Hour"  pillar={hourPillar}  dim={!hourPillar} selected={expandedPillar === 'hour'} onPress={hourPillar ? () => switchPillar('hour') : undefined} />
               </View>
               {!hourPillar && expandedPillar !== 'hour' && (
                 <Text style={styles.approxNote}>Hour pillar requires exact birth time. Add yours in settings to complete your chart.</Text>
@@ -305,27 +315,101 @@ export default function ChineseScreen() {
 
                   <View style={styles.pillarDetailDivider} />
 
-                  <View style={styles.pillarDetailBlock}>
-                    <Text style={[styles.pillarDetailBlockLabel, { color: stemEl?.color ?? Colors.gold }]}>
-                      {active.stemChar} HEAVENLY STEM · {active.stem.toUpperCase()}
-                    </Text>
-                    <Text style={styles.pillarDetailBlockText}>
-                      {stemEl?.label ?? active.stemElement} energy — {stemEl?.keywords.join(', ').toLowerCase() ?? ''}.
-                      {isDayPillar
-                        ? ' This is your Day Master: the central element through which everything else in your chart is read.'
-                        : ` Shapes how you express ${meta.domain.split(',')[0]!.toLowerCase()} in this domain.`}
-                    </Text>
-                  </View>
+                  {/* Heavenly Stem — tap to expand into the full Day Master
+                      profile (personality / relationships / career / challenge). */}
+                  {(() => {
+                    const stemProfile = DAY_MASTER_PROFILES[active.stem];
+                    return (
+                      <TouchableOpacity
+                        style={styles.pillarDetailBlock}
+                        onPress={() => setStemExpanded(v => !v)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={styles.subBlockHeader}>
+                          <Text style={[styles.pillarDetailBlockLabel, { color: stemEl?.color ?? Colors.gold }]}>
+                            {active.stemChar} HEAVENLY STEM · {active.stem.toUpperCase()}
+                          </Text>
+                          <Text style={[styles.subBlockChevron, { color: stemEl?.color ?? Colors.gold }]}>
+                            {stemExpanded ? '−' : '+'}
+                          </Text>
+                        </View>
+                        <Text style={styles.pillarDetailBlockText}>
+                          {stemEl?.label ?? active.stemElement} energy — {stemEl?.keywords.join(', ').toLowerCase() ?? ''}.
+                          {isDayPillar
+                            ? ' This is your Day Master: the central element through which everything else in your chart is read.'
+                            : ` Shapes how you express ${meta.domain.split(',')[0]!.toLowerCase()} in this domain.`}
+                        </Text>
+                        {stemExpanded && stemProfile && (
+                          <View style={styles.deepBlock}>
+                            <Text style={[styles.deepBlockTitle, { color: stemEl?.color ?? Colors.gold }]}>
+                              {stemProfile.title} · {stemProfile.nature}
+                            </Text>
+                            <Text style={styles.deepBlockLabel}>WHO YOU ARE</Text>
+                            <Text style={styles.deepBlockText}>{stemProfile.personality}</Text>
+                            <Text style={styles.deepBlockLabel}>IN RELATIONSHIPS</Text>
+                            <Text style={styles.deepBlockText}>{stemProfile.relationships}</Text>
+                            <Text style={styles.deepBlockLabel}>CAREER & PATH</Text>
+                            <Text style={styles.deepBlockText}>{stemProfile.career}</Text>
+                            <Text style={styles.deepBlockLabel}>YOUR CHALLENGE</Text>
+                            <Text style={styles.deepBlockText}>{stemProfile.challenge}</Text>
+                            <Text style={styles.deepBlockLabel}>SUPPORTIVE ELEMENTS</Text>
+                            <Text style={styles.deepBlockText}>
+                              {stemProfile.usefulElements.join(' & ')} energies nourish and balance this stem.
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })()}
 
-                  <View style={styles.pillarDetailBlock}>
-                    <Text style={[styles.pillarDetailBlockLabel, { color: branchEl?.color ?? Colors.star }]}>
-                      {active.branchChar} EARTHLY BRANCH · {active.branch.toUpperCase()}
-                    </Text>
-                    <Text style={styles.pillarDetailBlockText}>
-                      {branchEl?.label ?? active.branchElement} energy — {branchEl?.keywords.join(', ').toLowerCase() ?? ''}.
-                      {' '}The {active.branch} brings the animal nature of this pillar, colouring how the stem's energy plays out over time.
-                    </Text>
-                  </View>
+                  {/* Earthly Branch — tap to expand into compatibility,
+                      lucky attributes, and the season/direction it rules. */}
+                  {(() => {
+                    const compat = BAZI_COMPATIBILITY[active.branch];
+                    const lucky = LUCKY_ATTRIBUTES[active.branch];
+                    return (
+                      <TouchableOpacity
+                        style={styles.pillarDetailBlock}
+                        onPress={() => setBranchExpanded(v => !v)}
+                        activeOpacity={0.75}
+                      >
+                        <View style={styles.subBlockHeader}>
+                          <Text style={[styles.pillarDetailBlockLabel, { color: branchEl?.color ?? Colors.star }]}>
+                            {active.branchChar} EARTHLY BRANCH · {active.branch.toUpperCase()}
+                          </Text>
+                          <Text style={[styles.subBlockChevron, { color: branchEl?.color ?? Colors.star }]}>
+                            {branchExpanded ? '−' : '+'}
+                          </Text>
+                        </View>
+                        <Text style={styles.pillarDetailBlockText}>
+                          {branchEl?.label ?? active.branchElement} energy — {branchEl?.keywords.join(', ').toLowerCase() ?? ''}.
+                          {' '}The {active.branch} brings the animal nature of this pillar, colouring how the stem's energy plays out over time.
+                        </Text>
+                        {branchExpanded && (
+                          <View style={styles.deepBlock}>
+                            {compat && (
+                              <>
+                                <Text style={styles.deepBlockLabel}>BEST COMPATIBILITY</Text>
+                                <Text style={styles.deepBlockText}>{compat.best.join(' · ')}</Text>
+                                <Text style={styles.deepBlockLabel}>CHALLENGING DYNAMICS</Text>
+                                <Text style={styles.deepBlockText}>{compat.challenging.join(' · ')}</Text>
+                              </>
+                            )}
+                            {lucky && (
+                              <>
+                                <Text style={styles.deepBlockLabel}>LUCKY NUMBERS</Text>
+                                <Text style={styles.deepBlockText}>{lucky.numbers}</Text>
+                                <Text style={styles.deepBlockLabel}>LUCKY COLOURS</Text>
+                                <Text style={styles.deepBlockText}>{lucky.colors.join(' · ')}</Text>
+                                <Text style={styles.deepBlockLabel}>DIRECTION & SEASON</Text>
+                                <Text style={styles.deepBlockText}>{lucky.direction} · {lucky.season}</Text>
+                              </>
+                            )}
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })()}
                 </View>
               )}
               {!active && expandedPillar === 'hour' && (
@@ -611,8 +695,14 @@ const styles = StyleSheet.create({
   pillarDetailText: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, opacity: 0.9 },
   pillarDetailDivider: { height: 1, backgroundColor: Colors.cardBorder, marginVertical: 14 },
   pillarDetailBlock: { marginBottom: 12 },
-  pillarDetailBlockLabel: { fontSize: 10, letterSpacing: 1.5, fontFamily: Fonts.cinzel, marginBottom: 6 },
-  pillarDetailBlockText: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20, opacity: 0.85 },
+  pillarDetailBlockLabel: { fontSize: 10, letterSpacing: 1.5, fontFamily: Fonts.cinzel, flex: 1 },
+  pillarDetailBlockText: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20, opacity: 0.85, marginTop: 6 },
+  subBlockHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  subBlockChevron: { fontSize: 18, fontFamily: Fonts.cinzel, lineHeight: 18, width: 16, textAlign: 'center' },
+  deepBlock: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.cardBorder, gap: 4 },
+  deepBlockTitle: { fontSize: 13, fontFamily: Fonts.cinzel, marginBottom: 8, letterSpacing: 0.3 },
+  deepBlockLabel: { fontSize: 9, letterSpacing: 1.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginTop: 10 },
+  deepBlockText: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20, opacity: 0.85 },
 
   dayMasterHero: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: Colors.card, borderWidth: 1.5, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 12 },
   dayMasterChar: { fontSize: 48, fontFamily: Fonts.cinzel },
