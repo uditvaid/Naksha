@@ -64,10 +64,13 @@ export function isPremiumActive(customerInfo: CustomerInfo): boolean {
   return !!customerInfo.entitlements.active['premium'];
 }
 
-// Pricing display helpers
+// Pricing display helpers — fallback strings shown only if RevenueCat
+// hasn't loaded yet. Real prices come from `pkg.product.priceString` once
+// the offerings fetch returns. Update these when you change the App Store
+// Connect product prices so the loading-state UI reads correctly.
 export const PRICING = {
-  monthly: { price: '$14.99', period: 'month', label: 'Monthly' },
-  annual: { price: '$149.99', period: 'year', label: 'Annual', savings: 'Save 17%' },
+  threeMonth: { price: '$39.99', period: '3 months', label: '3 Months' },
+  annual: { price: '$149.99', period: 'year', label: 'Annual', savings: 'Save 6%' },
   lifetime: { price: '$249.99', period: 'once', label: 'Lifetime', savings: 'Best Value' },
 };
 

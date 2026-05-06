@@ -9,14 +9,19 @@ import { useAppStore } from '@store/userStore';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import type { PurchasesPackage } from 'react-native-purchases';
 
+type Tier = 'threeMonth' | 'annual' | 'lifetime';
+
 function findPackageForTier(
   pkgs: PurchasesPackage[],
-  tier: 'monthly' | 'annual' | 'lifetime'
+  tier: Tier,
 ): PurchasesPackage | undefined {
-  if (tier === 'monthly') {
+  if (tier === 'threeMonth') {
     return pkgs.find(p =>
-      p.packageType === 'MONTHLY' ||
-      p.identifier.toLowerCase().includes('monthly')
+      p.packageType === 'THREE_MONTH' ||
+      p.identifier.toLowerCase().includes('3month') ||
+      p.identifier.toLowerCase().includes('three_month') ||
+      p.identifier.toLowerCase().includes('threemonth') ||
+      p.identifier.toLowerCase().includes('quarterly')
     );
   }
   if (tier === 'annual') {
@@ -38,7 +43,7 @@ export default function PaywallScreen() {
   const [selectedPkg, setSelectedPkg] = useState<PurchasesPackage | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
+  const [selectedTier, setSelectedTier] = useState<Tier>('annual');
 
   useEffect(() => {
     let mounted = true;
@@ -114,7 +119,7 @@ export default function PaywallScreen() {
   };
 
   const tiers = [
-    { key: 'monthly', ...PRICING.monthly },
+    { key: 'threeMonth', ...PRICING.threeMonth },
     { key: 'annual', ...PRICING.annual },
     { key: 'lifetime', ...PRICING.lifetime },
   ] as const;
@@ -208,12 +213,13 @@ export default function PaywallScreen() {
                 </Text>
                 {(() => {
                   if (tier.key === 'annual') {
-                    const monthlyPkg = findPackageForTier(packages, 'monthly');
+                    // Annual savings vs paying every 3 months for a year (4 cycles).
+                    const threePkg = findPackageForTier(packages, 'threeMonth');
                     const annualPkg = findPackageForTier(packages, 'annual');
-                    const monthlyPrice = monthlyPkg?.product?.price;
+                    const threePrice = threePkg?.product?.price;
                     const annualPrice = annualPkg?.product?.price;
-                    if (monthlyPrice && annualPrice && monthlyPrice > 0) {
-                      const pct = Math.round(((monthlyPrice * 12 - annualPrice) / (monthlyPrice * 12)) * 100);
+                    if (threePrice && annualPrice && threePrice > 0) {
+                      const pct = Math.round(((threePrice * 4 - annualPrice) / (threePrice * 4)) * 100);
                       if (pct > 0) return (
                         <View style={styles.savingsBadge}>
                           <Text style={styles.savingsBadgeText}>Save {pct}%</Text>
