@@ -1,11 +1,19 @@
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { getLalKitabReading } from '@services/claude';
 import { LAL_KITAB_REMEDIES } from '@constants/astrology';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
+
+// Each weekday has a Lal Kitab planetary ruler. The remedies in the
+// LAL_KITAB_REMEDIES table are already keyed to these days (e.g. Sun's
+// remedies reference "on Sundays"), so the "Daily Remedies" block surfaces
+// today's ruler and its full remedy list — that's the traditionally correct
+// pairing and makes the section live up to its name.
+const WEEKDAY_PLANETS = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'] as const;
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
 // Strip light markdown defensively. Haiku tends to emit `## headers` and
 // `**bold**` in prose readings even when the system prompt asks for flowing
@@ -38,6 +46,20 @@ export default function LalKitabScreen() {
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Bumps on screen focus so the "Daily Remedies" planet rolls over at the
+  // user's local midnight without requiring an app relaunch — same pattern
+  // used on the home + chart screens.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useFocusEffect(useCallback(() => { setNowTick(Date.now()); }, []));
+
+  const { todayPlanet, todayName } = useMemo(() => {
+    const d = new Date(nowTick);
+    const idx = d.getDay();
+    return {
+      todayPlanet: WEEKDAY_PLANETS[idx]!,
+      todayName: WEEKDAY_NAMES[idx]!,
+    };
+  }, [nowTick]);
 
   const fetchReading = async () => {
     if (!user.birthData) {
@@ -133,12 +155,16 @@ export default function LalKitabScreen() {
           </ScrollView>
         </View>
 
-        {/* Quick remedies */}
+        {/* Quick remedies — today's planetary ruler when no planet picked,
+            or the user's pick when one is. Show all 5 remedies for the
+            selected planet (they're short tactical actions). */}
         <View style={styles.remediesSection}>
           <Text style={styles.sectionTitle}>
-            {selectedPlanet ? `${selectedPlanet.toUpperCase()} REMEDIES` : 'DAILY REMEDIES'}
+            {selectedPlanet
+              ? `${selectedPlanet.toUpperCase()} REMEDIES`
+              : `${todayName.toUpperCase()} · ${todayPlanet.toUpperCase()} REMEDIES`}
           </Text>
-          {(selectedPlanet ? [selectedPlanet] : ['Sun', 'Moon', 'Saturn']).map(planet => (
+          {[selectedPlanet ?? todayPlanet].map(planet => (
             <View key={planet} style={styles.planetRemediesCard}>
               <View style={styles.planetRemediesHeader}>
                 <View style={[styles.planetIconWrap, { backgroundColor: PLANET_COLORS[planet] + '20' }]}>
@@ -146,7 +172,7 @@ export default function LalKitabScreen() {
                 </View>
                 <Text style={[styles.planetRemediesTitle, { color: PLANET_COLORS[planet] }]}>{planet}</Text>
               </View>
-              {LAL_KITAB_REMEDIES[planet]?.slice(0, 3).map((remedy, i) => (
+              {LAL_KITAB_REMEDIES[planet]?.map((remedy, i) => (
                 <View key={i} style={styles.remedyRow}>
                   <Text style={styles.remedyDot}>◈</Text>
                   <Text style={styles.remedyText}>{remedy}</Text>
