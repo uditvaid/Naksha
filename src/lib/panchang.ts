@@ -125,16 +125,28 @@ export function yogaLabel(yoga: string): string {
 // ─── Time formatting ─────────────────────────────────────────────────────────
 
 /**
- * Format an ISO datetime in the user's local time as "5:40 AM" / "6:55 PM".
- * Handles the timezone-suffixed strings Prokerala returns
- * (e.g. "2026-05-07T05:39:48+05:30").
+ * Format an ISO datetime in the SAME timezone the string carries, NOT in
+ * the device's local timezone. Prokerala returns timestamps already
+ * anchored to the user's birth-coords timezone (e.g.
+ * "2026-05-07T05:39:48+05:30" for Faridabad). Using `Date.getHours()`
+ * would silently convert to whatever timezone the device happens to be
+ * in — so a user travelling internationally, or running the app on a
+ * sim in a different region, would see times shifted by hours.
+ *
+ * We parse the time-of-day portion directly from the string instead of
+ * round-tripping through Date, which preserves the intended timezone.
+ *
+ * Example: "2026-05-07T11:50:55+05:30" → "11:50 AM" (regardless of
+ * where the device clock is set).
  */
 export function formatLocalTime(isoWithTz: string): string {
   if (!isoWithTz) return '';
-  const d = new Date(isoWithTz);
-  if (isNaN(d.getTime())) return '';
-  let h = d.getHours();
-  const m = d.getMinutes();
+  // Match HH:MM after the "T" separator, ignoring seconds + offset.
+  const match = isoWithTz.match(/T(\d{2}):(\d{2})/);
+  if (!match) return '';
+  let h = parseInt(match[1]!, 10);
+  const m = parseInt(match[2]!, 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return '';
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;

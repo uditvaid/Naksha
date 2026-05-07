@@ -22,63 +22,66 @@ export interface MuhuratDetail {
 }
 
 // Keyed on the lowercased name (Prokerala's `name` field). Their casing is
-// stable, but lowercasing protects against drift.
+// stable, but lowercasing protects against drift. Labels are written in
+// "what is this for?" form — every shortLabel tells the user what to *do*
+// (or not do) during the window. The Sanskrit name is kept separately for
+// the modal subtitle.
 const DETAILS: Record<string, MuhuratDetail> = {
   // ─── Auspicious ─────────────────────────────────────────────────────────
   'abhijit muhurat': {
-    shortLabel: 'Most reliable window',
-    meaning: 'The 48-minute window around solar noon. Classically the safest time to start anything important.',
+    shortLabel: 'Best for big decisions',
+    meaning: 'The 48-minute window around solar noon. Classically the safest time of the day to start anything important — sign documents, make commitments, launch projects.',
     sanskrit: 'Abhijit Muhurat',
   },
   'amrit kaal': {
-    shortLabel: 'Nectar hour',
-    meaning: "A window of unusually clean energy — favorable for new beginnings, prayer, or reset.",
+    shortLabel: 'Best for fresh starts',
+    meaning: 'A window of unusually clean energy — favorable for new beginnings, prayer, setting intentions, or hitting reset on something stuck.',
     sanskrit: 'Amrit Kaal',
   },
   'brahma muhurat': {
-    shortLabel: 'Pre-dawn clarity',
-    meaning: 'The pre-dawn window. Best for inner work — meditation, reflection, deep focus.',
+    shortLabel: 'Best for meditation',
+    meaning: 'The pre-dawn stillness window. Best of the day for inner work — meditation, reflection, journaling, deep focus.',
     sanskrit: 'Brahma Muhurat',
   },
   // ─── Inauspicious ───────────────────────────────────────────────────────
   'rahu': {
-    shortLabel: 'Rahu Kalam',
-    meaning: 'Classical "avoid" window. Skip new commitments, signing, launching, or asking for things.',
+    shortLabel: 'Avoid new commitments',
+    meaning: 'Classical "avoid" window. Skip new commitments, signing, launching, asking for favours, or interviewing. Routine work is fine.',
     sanskrit: 'Rahu Kalam',
   },
   'rahu kalam': {
-    shortLabel: 'Rahu Kalam',
-    meaning: 'Classical "avoid" window. Skip new commitments, signing, launching, or asking for things.',
+    shortLabel: 'Avoid new commitments',
+    meaning: 'Classical "avoid" window. Skip new commitments, signing, launching, asking for favours, or interviewing. Routine work is fine.',
     sanskrit: 'Rahu Kalam',
   },
   'yamaganda': {
-    shortLabel: 'Yamaganda',
-    meaning: "Avoid travel and new ventures during this window. Routine work is fine.",
+    shortLabel: 'Avoid travel & launches',
+    meaning: 'Classically inauspicious for travel, new ventures, or important first meetings. Routine work and existing tasks are fine.',
     sanskrit: 'Yamaganda Kalam',
   },
   'yamaganda kalam': {
-    shortLabel: 'Yamaganda',
-    meaning: "Avoid travel and new ventures during this window. Routine work is fine.",
+    shortLabel: 'Avoid travel & launches',
+    meaning: 'Classically inauspicious for travel, new ventures, or important first meetings. Routine work and existing tasks are fine.',
     sanskrit: 'Yamaganda Kalam',
   },
   'gulika': {
-    shortLabel: 'Gulika Kalam',
-    meaning: "Avoid major decisions and big commitments. The window is heavy and slow.",
+    shortLabel: 'Avoid major decisions',
+    meaning: 'Heavy, slow window classically tied to delays and obstacles. Avoid major decisions and big commitments — push them to a clearer time.',
     sanskrit: 'Gulika Kalam',
   },
   'gulika kalam': {
-    shortLabel: 'Gulika Kalam',
-    meaning: "Avoid major decisions and big commitments. The window is heavy and slow.",
+    shortLabel: 'Avoid major decisions',
+    meaning: 'Heavy, slow window classically tied to delays and obstacles. Avoid major decisions and big commitments — push them to a clearer time.',
     sanskrit: 'Gulika Kalam',
   },
   'dur muhurat': {
-    shortLabel: 'Tense window',
-    meaning: 'Short windows of friction in the day — handle delicate conversations later if you can.',
+    shortLabel: 'Hold off difficult conversations',
+    meaning: 'Short windows of friction in the day. If you can, push delicate conversations or sensitive negotiations to another time.',
     sanskrit: 'Dur Muhurat',
   },
   'varjyam': {
-    shortLabel: 'Skip-it window',
-    meaning: 'Classical avoid-period. Best for rest, not for action.',
+    shortLabel: 'Best for rest, not action',
+    meaning: 'Classical avoid-period. Use it for rest, light tasks, or quiet time — not for important action.',
     sanskrit: 'Varjyam',
   },
 };
