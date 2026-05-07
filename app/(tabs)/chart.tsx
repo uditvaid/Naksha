@@ -14,6 +14,7 @@ import { askGuru } from '@services/claude';
 import { generateChart } from '@services/prokerala';
 import { findActiveDasha } from '@utils/vedic';
 import { SadeSatiCard } from '@components/SadeSatiCard';
+import { DoshaCard } from '@components/DoshaCard';
 
 // ─── Lagna (Rising Sign) descriptions ────────────────────────────────────────
 
@@ -558,6 +559,11 @@ export default function ChartScreen() {
 
         {/* ── Chart tab ── */}
         {activeTab === 'Chart' && (
+          <>
+          {/* Mangal + Kalsarpa markers — silent when neither is present.
+              Mangal pulled from Prokerala, Kalsarpa computed locally from
+              the Rahu-Ketu axis vs visible planets. */}
+          <DoshaCard birthData={user.birthData} chart={user.chart} />
           <View style={styles.section}>
             {user.chart ? (
               <>
@@ -638,6 +644,7 @@ export default function ChartScreen() {
               </View>
             )}
           </View>
+          </>
         )}
 
         {/* ── Dashas tab ── */}

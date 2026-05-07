@@ -543,6 +543,48 @@ export async function getAuspiciousPeriods(
   return promise;
 }
 
+// ─── Mangal Dosha (Mars-related challenge for partnerships) ─────────────────
+
+let _mangalCache: { key: string; data: MangalDoshaInfo } | null = null;
+let _mangalInflight: { key: string; promise: Promise<MangalDoshaInfo> } | null = null;
+
+export async function getMangalDosha(birthData: BirthData): Promise<MangalDoshaInfo> {
+  // Mangal Dosha is a property of the natal chart only — doesn't change
+  // by date. Cache for the session keyed on birth datetime + rounded coords.
+  const key = `${birthData.dateOfBirth}|${birthData.timeOfBirth}|${birthData.latitude.toFixed(2)},${birthData.longitude.toFixed(2)}`;
+  if (_mangalCache?.key === key) return _mangalCache.data;
+  if (_mangalInflight?.key === key) return _mangalInflight.promise;
+
+  const params = {
+    datetime: formatDateTime(birthData.dateOfBirth, birthData.timeOfBirth, birthData.timezone),
+    coordinates: `${birthData.latitude},${birthData.longitude}`,
+    ayanamsa: '1',
+    la: 'en',
+  };
+
+  const promise = (async () => {
+    try {
+      if (__DEV__) console.log('[MangalDosha] fetching natal');
+      const raw = await prokeralaGet('mangal-dosha', params);
+      if (__DEV__) console.log(`[MangalDosha] has=${raw?.has_dosha}`);
+      const data: MangalDoshaInfo = {
+        hasDosha: !!raw?.has_dosha,
+        // The standalone endpoint doesn't return has_exception or
+        // dosha_type — only kundli-matching/advanced does. Default safely.
+        hasException: !!raw?.has_exception,
+        doshaType: raw?.dosha_type ?? null,
+        description: raw?.description ?? '',
+      };
+      _mangalCache = { key, data };
+      return data;
+    } finally {
+      if (_mangalInflight?.key === key) _mangalInflight = null;
+    }
+  })();
+  _mangalInflight = { key, promise };
+  return promise;
+}
+
 // ─── Sade Sati / Saturn challenging transit ──────────────────────────────────
 
 export interface SadeSatiData {
