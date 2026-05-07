@@ -85,6 +85,12 @@ describe('detectKalsarpa', () => {
     expect(result.rahuHouse).toBeNull();
   });
 
+  test('returns no-dosha when planets array is null/undefined/empty', () => {
+    expect(detectKalsarpa(null as any).hasDosha).toBe(false);
+    expect(detectKalsarpa(undefined as any).hasDosha).toBe(false);
+    expect(detectKalsarpa([]).hasDosha).toBe(false);
+  });
+
   test('returns no-dosha when Rahu is missing from the chart', () => {
     const planets: PlanetPosition[] = [
       planet('Sun', 0, 15, 1),

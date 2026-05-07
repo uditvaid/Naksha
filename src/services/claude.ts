@@ -513,26 +513,37 @@ Day-element interplay: ${ch.elementInterplay} — ${ch.elementInterplayDescripti
   }
 
   // Authoritative Ashta-koota score from Prokerala when available. The UI
-  // shows the per-koota breakdown card directly above this prose, so we no
-  // longer ask Claude to calculate or display a score — the prose is now
-  // pure interpretation, anchored to the deterministic numbers above.
+  // shows the per-koota breakdown card directly above this prose, so we
+  // don't ask Claude to calculate or display a score in that case — the
+  // prose is pure interpretation, anchored to the deterministic numbers.
+  // When the API call failed (ashtaKoota=null), fall back to the legacy
+  // prompt that asks Claude to estimate the score and lead with SCORE:X/36
+  // so the user still gets a number rather than a numberless fallback.
   let ashtaBlock = '';
   if (ashtaKoota) {
     const lines = ashtaKoota.areas.map(a =>
       `${a.name}: ${a.obtainedPoints}/${a.maximumPoints} — ${person1.birthData.name} ${a.girlBucket} vs ${person2.birthData.name} ${a.boyBucket}`,
     ).join('\n');
-    ashtaBlock = `═══ Ashtakoota Milan (precomputed, deterministic) ═══
-Total: ${ashtaKoota.totalPoints}/${ashtaKoota.maximumPoints}
-Verdict: ${ashtaKoota.verdict}
+    ashtaBlock = `═══ Ashtakoota Milan (precomputed, deterministic — total and per-area scores authoritative; do not print these numbers, only interpret what they mean) ═══
 ${lines}
+Verdict: ${ashtaKoota.verdict}
 `;
   }
 
-  const system = `You are a warm, insightful guide helping people understand their relationships through both Vedic (Ashtakoota Milan) and Chinese (BaZi) astrological analysis.
+  const system = ashtaKoota
+    ? `You are a warm, insightful guide helping people understand their relationships through both Vedic (Ashtakoota Milan) and Chinese (BaZi) astrological analysis.
 
-The Ashtakoota score is provided in the user message — do NOT recalculate it, do NOT print "SCORE: X/36", and do NOT list all 8 kootas with numbers (the UI already shows the breakdown above your reading). Your job is the interpretation: what the strong matches give the relationship, what the weaker areas ask the couple to work with, and how the living chart context (dasha periods, Chinese overlay) shapes the present moment.
+The Ashtakoota score is shown to the user in a card above your reading, and the per-koota breakdown is provided in the user message for context. Do NOT print "SCORE: X/36" or any numeric score. Do NOT list all 8 kootas with numbers — the UI already shows that. Do NOT use the Sanskrit koota names (Varna, Vasya, Tara, Yoni, Graha Maitri, Gana, Bhakoot, Nadi). Your job is plain-English interpretation: what the strong matches give the relationship, what the weaker areas ask the couple to work with, and how their current life phases (dasha periods, Chinese overlay) shape the present moment.
 
-Write in plain, warm English that anyone can understand. No jargon. Be honest but compassionate. Plain prose only — no markdown formatting (no #, ##, ### headers; no **bold**; no horizontal rules; no bullet lists). Use plain paragraphs separated by blank lines.`;
+Write in plain, warm English that anyone can understand. No jargon. Be honest but compassionate. Plain prose only — no markdown formatting (no #, ##, ### headers; no **bold**; no horizontal rules; no bullet lists). Use plain paragraphs separated by blank lines.`
+    : `You are a warm, insightful guide helping people understand their relationships through both Vedic (Ashtakoota Milan) and Chinese (BaZi) astrological analysis.
+
+IMPORTANT: You MUST begin your response with the Ashtakoota compatibility score on its own line in this exact format:
+SCORE: X/36
+
+Estimate the Ashtakoota score based on the 8 Kootas (matching criteria) from both Moon Nakshatras: Varna (1pt), Vashya (2pt), Tara (3pt), Yoni (4pt), Graha Maitri (5pt), Gana (6pt), Bhakoot (7pt), Nadi (8pt). Be as accurate as possible based on the Moon Nakshatra positions.
+
+After the score line, write in plain, warm English that anyone can understand. No jargon. Be honest but compassionate. Plain prose only — no markdown formatting (no #, ##, ### headers; no **bold**; no horizontal rules; no bullet lists). Use plain paragraphs separated by blank lines.`;
 
   // Compatibility was on Sonnet @1800 — taking ~40s and truncating
   // (stop_reason: max_tokens). The 30s app timeout fired before the
@@ -558,7 +569,7 @@ Then cover: their deepest compatibility strengths; the 1-2 weakest areas and wha
 
 Where the Chinese overlay reinforces or contrasts the Vedic reading, weave it in — for example, if the year zodiacs sit in a classic supportive triad or if the day-master elements are in a generating/controlling cycle. Use it to enrich the reading, never to contradict the Vedic core.
 
-Be honest, specific to their charts, and encouraging. Keep it tight — every sentence should earn its place. Do NOT begin with "SCORE:" or any numeric header — the UI already shows the score above your reading.`,
+Be honest, specific to their charts, and encouraging. Keep it tight — every sentence should earn its place.${ashtaKoota ? ' Do NOT begin with "SCORE:" or any numeric header — the UI already shows the score above your reading.' : ''}`,
   }], 2400, undefined, FAST_MODEL, LONG_READING_TIMEOUT_MS);
 }
 

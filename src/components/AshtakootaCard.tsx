@@ -22,7 +22,6 @@ interface Props {
   me: BirthData | null | undefined;
   partner: BirthData | null | undefined;
   partnerDisplayName: string;
-  onScore?: (total: number, max: number) => void;
 }
 
 const TONE_COLOR = {
@@ -37,13 +36,9 @@ const QUALITY_COLOR = {
   weak: Colors.muted,
 } as const;
 
-export function AshtakootaCard({ me, partner, partnerDisplayName, onScore }: Props) {
+export function AshtakootaCard({ me, partner, partnerDisplayName }: Props) {
   const [open, setOpen] = useState(false);
   const data = useAshtaKoota(me, partner);
-
-  // Notify parent of the deterministic score so the existing prose-area
-  // can stop relying on Claude's regex-parsed score.
-  if (data && onScore) onScore(data.totalPoints, data.maximumPoints);
 
   if (!data) return null;
 

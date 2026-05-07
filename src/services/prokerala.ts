@@ -520,12 +520,23 @@ export async function getAuspiciousPeriods(
         prokeralaGet('inauspicious-period', params).catch((e) => { if (__DEV__) console.warn('[Periods] inauspicious failed:', e?.message); return null; }),
       ]);
 
-      const normalise = (raw: any): MuhuratWindow[] => (raw?.muhurat ?? []).map((m: any) => ({
-        id: m.id,
-        name: m.name ?? '',
-        type: m.type ?? '',
-        windows: (m.period ?? []).map((p: any) => ({ start: p.start, end: p.end })),
-      }));
+      // Defensive normalisation — Prokerala's `period` field is always an
+      // array in observed responses, but a single-window response could
+      // theoretically arrive as a bare object. Coerce both shapes.
+      const normalise = (raw: any): MuhuratWindow[] => {
+        const muhurat = Array.isArray(raw?.muhurat) ? raw.muhurat : [];
+        return muhurat.map((m: any) => {
+          const periodArr = Array.isArray(m?.period) ? m.period : (m?.period ? [m.period] : []);
+          return {
+            id: m?.id ?? 0,
+            name: m?.name ?? '',
+            type: m?.type ?? '',
+            windows: periodArr
+              .filter((p: any) => p?.start && p?.end)
+              .map((p: any) => ({ start: p.start, end: p.end })),
+          };
+        });
+      };
 
       const data: AuspiciousPeriodsData = {
         auspicious: normalise(ausRaw),

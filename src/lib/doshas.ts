@@ -59,7 +59,12 @@ const KALSARPA_BY_HOUSE: { sanskrit: string; theme: string }[] = [
  * Partial Kalsarpa = all 7 in (180, 360). Either case names a sub-type
  * based on which house Rahu occupies.
  */
-export function detectKalsarpa(planets: PlanetPosition[]): KalsarpaResult {
+export function detectKalsarpa(planets: PlanetPosition[] | null | undefined): KalsarpaResult {
+  // Defensive: chart can technically arrive without a planets array (e.g.
+  // a half-loaded approximate chart, or a chart shape we haven't seen).
+  if (!planets || !Array.isArray(planets) || planets.length === 0) {
+    return { hasDosha: false, isPartial: false, rahuHouse: null, subTypeLabel: null, subTypeSanskrit: null };
+  }
   const rahu = planets.find(p => p.planet === 'Rahu');
   if (!rahu) return { hasDosha: false, isPartial: false, rahuHouse: null, subTypeLabel: null, subTypeSanskrit: null };
 

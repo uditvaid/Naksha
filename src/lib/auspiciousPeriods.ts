@@ -88,9 +88,13 @@ const DETAILS: Record<string, MuhuratDetail> = {
 
 export function muhuratDetail(name: string): MuhuratDetail {
   const key = name.toLowerCase().trim();
+  // Fallback for muhurat names we haven't authored a translation for yet.
+  // Prokerala may add new ones over time — surface the raw name as the
+  // headline (already-titled like "Abhijit Muhurat") with a generic
+  // meaning so the modal never shows an empty paragraph.
   return DETAILS[key] ?? {
     shortLabel: name,
-    meaning: '',
+    meaning: 'A classical Vedic timing window. Treat as guidance for the rhythm of the day.',
     sanskrit: name,
   };
 }
