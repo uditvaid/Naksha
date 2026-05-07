@@ -10,6 +10,7 @@ import { computeLunarPhase } from '@lib/daily/signals';
 import { DailyShareButton } from '@components/DailyShareButton';
 import { useDailyContinuityStore, DailyRecord } from '@store/dailyContinuityStore';
 import { todaysAffirmation, todaysFocus } from '@lib/dailyAffirmation';
+import { usePanchang, panchangSummaryLine } from '@lib/panchang';
 import { findActiveDasha, findActiveAntardasha } from '@utils/vedic';
 
 function stripMarkdown(text: string): string {
@@ -112,6 +113,11 @@ export default function HomeScreen() {
   // Re-derive whenever the focus tick advances so the strings refresh after midnight
   // without requiring the user to fully relaunch the app.
   const dailyAffirmation = useMemo(() => todaysAffirmation(), [nowTick]);
+  // Panchang acts as quiet context above the affirmation — weekday + Moon's
+  // nakshatra + waxing/waning. Renders nothing if the fetch fails so the
+  // affirmation surface is unaffected.
+  const panchang = usePanchang(birthData, nowTick);
+  const panchangLine = useMemo(() => panchangSummaryLine(panchang, nowTick), [panchang, nowTick]);
   const dailyFocus = useMemo(
     () => todaysFocus(activeDasha?.planet),
     [activeDasha?.planet, nowTick],
@@ -281,10 +287,14 @@ export default function HomeScreen() {
         </View>
 
         {/* Daily Affirmation — same content as today's 8am push notification.
-            Always present, no API call required. */}
+            Always present, no API call required. The Panchang line is a
+            quiet reference above the affirmation: weekday + Moon's
+            nakshatra + waxing/waning. Skipped if the API hasn't returned
+            yet so the affirmation surface stays unaffected. */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>TODAY'S AFFIRMATION</Text>
           <View style={styles.affirmationCard}>
+            {panchangLine && <Text style={styles.panchangContextLine}>{panchangLine}</Text>}
             <Text style={styles.affirmationText}>{dailyAffirmation}</Text>
             <View style={styles.focusDivider} />
             <Text style={styles.focusHeader}>✦ Top 3 to focus on today</Text>
@@ -433,6 +443,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 10 },
   readingCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
   affirmationCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gold + '55', borderRadius: Radius.lg, padding: Spacing.md, gap: 4 },
+  // Quiet Panchang context line above the affirmation — small, muted, italic
+  // so the affirmation itself remains the visual anchor of the card.
+  panchangContextLine: { fontSize: 11, letterSpacing: 0.5, color: Colors.gold, fontFamily: Fonts.cormorantItalic, opacity: 0.7, marginBottom: 6 },
   affirmationText: { fontSize: 15, color: Colors.star, fontFamily: Fonts.cormorantItalic, lineHeight: 24, marginBottom: 4 },
   focusDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.cardBorder, marginVertical: Spacing.sm },
   focusHeader: { fontSize: 11, letterSpacing: 1.2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 6 },

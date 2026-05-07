@@ -374,6 +374,100 @@ function computeFallbackLagnaSignIndex(birthData: BirthData): number {
   }
 }
 
+// ─── Panchang (daily Vedic almanac) ──────────────────────────────────────────
+
+export interface PanchangPeriod {
+  name: string;
+  start: string;
+  end: string;
+}
+export interface PanchangNakshatra extends PanchangPeriod {
+  id: number;
+  lord: string;
+}
+export interface PanchangData {
+  vaara: string;            // Day of the week ("Thursday")
+  nakshatra: PanchangNakshatra[];  // Up to 2 entries — current + next if it changes today
+  tithi: { name: string; paksha: string; start: string; end: string }[];
+  yoga: PanchangPeriod[];
+  karana: PanchangPeriod[];
+  sunrise: string;
+  sunset: string;
+  moonrise: string;
+  moonset: string;
+  date: string;             // ISO YYYY-MM-DD this represents
+}
+
+// Panchang is location- and date-specific; we cache by both. Daily readings
+// only need to fetch once per day per location, so a tiny in-memory cache
+// (lat/lon rounded + ISO date) avoids redundant API hits during a session.
+// We also dedup concurrent calls onto a single in-flight Promise so a
+// double-mount / focus rerender doesn't fire two parallel API calls.
+let _panchangCache: { key: string; data: PanchangData } | null = null;
+let _panchangInflight: { key: string; promise: Promise<PanchangData> } | null = null;
+
+export async function getPanchang(
+  birthData: BirthData,
+  date: Date = new Date(),
+): Promise<PanchangData> {
+  const isoDate = date.toISOString().split('T')[0]!;
+  const key = `${isoDate}|${birthData.latitude.toFixed(2)},${birthData.longitude.toFixed(2)}`;
+  if (_panchangCache?.key === key) return _panchangCache.data;
+  if (_panchangInflight?.key === key) return _panchangInflight.promise;
+
+  // Prokerala's panchang takes a datetime + coordinates. We send local-noon
+  // of `date` in the user's birth timezone — that anchors the response to
+  // the calendar date the user is asking about, regardless of UTC drift.
+  const datetime = formatDateTime(isoDate, '12:00', birthData.timezone);
+  const params = {
+    datetime,
+    coordinates: `${birthData.latitude},${birthData.longitude}`,
+    ayanamsa: '1',
+    la: 'en',
+  };
+
+  const promise = (async () => {
+    try {
+      if (__DEV__) console.log(`[Panchang] fetching for ${isoDate} @ ${params.coordinates}`);
+      const raw = await prokeralaGet('panchang', params);
+      if (__DEV__) console.log(`[Panchang] got vaara=${raw?.vaara} nak=${raw?.nakshatra?.[0]?.name} tithi=${raw?.tithi?.[0]?.name}`);
+      // Normalize the few fields we care about into a flatter shape; the lord
+      // field on nakshatra arrives as { id, name, vedic_name } — collapse to name.
+      const data: PanchangData = {
+        vaara: raw?.vaara ?? '',
+        nakshatra: (raw?.nakshatra ?? []).map((n: any) => ({
+          id: n.id,
+          name: n.name,
+          lord: n.lord?.name ?? '',
+          start: n.start,
+          end: n.end,
+        })),
+        tithi: (raw?.tithi ?? []).map((t: any) => ({
+          name: t.name,
+          paksha: t.paksha,
+          start: t.start,
+          end: t.end,
+        })),
+        yoga: (raw?.yoga ?? []).map((y: any) => ({ name: y.name, start: y.start, end: y.end })),
+        karana: (raw?.karana ?? []).map((k: any) => ({ name: k.name, start: k.start, end: k.end })),
+        sunrise: raw?.sunrise ?? '',
+        sunset: raw?.sunset ?? '',
+        moonrise: raw?.moonrise ?? '',
+        moonset: raw?.moonset ?? '',
+        date: isoDate,
+      };
+      _panchangCache = { key, data };
+      return data;
+    } finally {
+      // Clear the in-flight slot only if it's still ours — a later call for a
+      // different key may have replaced it.
+      if (_panchangInflight?.key === key) _panchangInflight = null;
+    }
+  })();
+  _panchangInflight = { key, promise };
+  return promise;
+}
+
 // ─── Main chart generation ────────────────────────────────────────────────────
 
 export async function generateChart(birthData: BirthData): Promise<ChartData> {
