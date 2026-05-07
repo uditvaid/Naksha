@@ -11,6 +11,17 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoCrypto from 'expo-crypto';
 
+// How long any reading-shaped record persists. Per product decision: a
+// rolling 7-day window. Used by daily records here and by savedReadings
+// in userStore. Centralised so both surfaces can't drift.
+export const READINGS_RETENTION_DAYS = 7;
+
+function isoNDaysAgo(days: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().split('T')[0]!;
+}
+
 export interface DailyRecord {
   id: string;
   date: string; // YYYY-MM-DD
@@ -44,7 +55,7 @@ export interface NarrativeThread {
 }
 
 export interface ContinuityState {
-  dailyRecords: DailyRecord[];      // last 90 days
+  dailyRecords: DailyRecord[];      // rolling READINGS_RETENTION_DAYS window
   journalEntries: JournalEntry[];   // all entries
   narrativeThreads: NarrativeThread[];
   lastArcSummaryDate: string | null;
@@ -77,9 +88,14 @@ export const useDailyContinuityStore = create<ContinuityState & ContinuityAction
 
       addDaily: (daily) => {
         const id = ExpoCrypto.randomUUID();
+        // Date-based retention: keep only records from the last
+        // READINGS_RETENTION_DAYS days. Older entries are pruned on every
+        // write rather than capped at a count, so the archive always
+        // reflects the 7-day window even if the user hasn't generated a
+        // reading every day.
+        const cutoff = isoNDaysAgo(READINGS_RETENTION_DAYS);
         set(state => ({
-          // Keep last 90 records
-          dailyRecords: [{ ...daily, id }, ...state.dailyRecords].slice(0, 90),
+          dailyRecords: [{ ...daily, id }, ...state.dailyRecords].filter(d => d.date >= cutoff),
         }));
         return id;
       },

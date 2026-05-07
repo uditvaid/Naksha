@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoCrypto from 'expo-crypto';
 import { FREE_GURU_QUESTIONS_PER_DAY } from '../constants/astrology';
+import { READINGS_RETENTION_DAYS } from './dailyContinuityStore';
 
 type ResetListener = () => void;
 const resetListeners: Set<ResetListener> = new Set();
@@ -216,11 +217,16 @@ export const useAppStore = create<AppState>()(
           id: ExpoCrypto.randomUUID(),
           createdAt: new Date().toISOString(),
         };
+        // Date-based retention matching dailyRecords: keep only readings
+        // from the last READINGS_RETENTION_DAYS days. Pruned on every
+        // write so the saved-readings list stays a rolling window
+        // regardless of how many readings the user generated in that span.
+        const cutoff = Date.now() - READINGS_RETENTION_DAYS * 86400000;
         set((state) => ({
           user: {
             ...state.user,
-            // Keep last 50 readings max
-            savedReadings: [newReading, ...state.user.savedReadings].slice(0, 50),
+            savedReadings: [newReading, ...state.user.savedReadings]
+              .filter((r) => new Date(r.createdAt).getTime() >= cutoff),
           },
         }));
       },
