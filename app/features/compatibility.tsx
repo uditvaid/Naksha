@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator, Alert, Platform, KeyboardAvoidingView,
+  TextInput, ActivityIndicator, Alert, Platform, KeyboardAvoidingView, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -10,7 +10,7 @@ import { useAppStore } from '@store/userStore';
 import { getCompatibilityReading } from '@services/claude';
 import { geocodePlace, generateChart, PlaceNotFoundError } from '@services/prokerala';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
-import { getChineseCompatibility, ELEMENT_DATA, type ZodiacLevel } from '@utils/bazi';
+import { getChineseCompatibility, ELEMENT_DATA, BAZI_COMPATIBILITY, type ZodiacLevel } from '@utils/bazi';
 import { validatePlace, PLACE_FORMAT_EXAMPLES } from '@utils/placeValidation';
 import type { BirthData, ChartData } from '@store/userStore';
 
@@ -32,8 +32,57 @@ function chineseLevelLabel(level: ZodiacLevel): string {
   }
 }
 
+// Day-master element interplay descriptions for the drill-down modal.
+// Maps the cycle relationship to a plain-English explanation of how the
+// two day-master elements interact in everyday relationship dynamics.
+const ELEMENT_INTERPLAY_DETAIL: Record<string, { headline: string; dynamic: string; advice: string }> = {
+  mirroring: {
+    headline: 'Mirrored Elements',
+    dynamic: 'You share the same day-master element. There\'s deep recognition — you understand each other\'s rhythms without explanation. The risk is amplification: when one of you spirals, the other reinforces it instead of balancing it.',
+    advice: 'Build rituals that introduce the missing elements deliberately — physical activity, time apart, contact with people whose elements differ from yours. Same element wants company, but it also needs contrast to stay healthy.',
+  },
+  nurturing: {
+    headline: 'You Nurture Them',
+    dynamic: 'Your day-master element naturally generates theirs in the productive cycle. You give energy, encouragement, and grounding — they receive it and grow. This is one of the most supportive interplays in BaZi.',
+    advice: 'Watch for over-giving. The flow goes one direction, so check in with yourself — are you depleting? Healthy nurturing requires you to also receive (from other relationships, your own practices). The relationship works best when you\'re both deliberate about reciprocity.',
+  },
+  received: {
+    headline: 'They Nurture You',
+    dynamic: 'Their day-master element naturally generates yours. You receive their energy, support, and grounding — they give it freely. This is one of the most supportive interplays in BaZi.',
+    advice: 'Recognise and acknowledge what you\'re receiving — silent gratitude isn\'t enough. Express it. Reciprocity in this dynamic comes from showing up emotionally, not necessarily energetically. They give from their nature; you keep the relationship balanced by witnessing it.',
+  },
+  controlling: {
+    headline: 'You Challenge Them',
+    dynamic: 'Your day-master element controls theirs in the controlling cycle. You can sharpen them, refine them, push them toward growth — but the same dynamic can feel critical or overpowering if unbridled. The cycle creates pressure either way.',
+    advice: 'Lead with appreciation before critique. The controlling cycle isn\'t bad — it\'s how steel gets forged — but it requires intentional softness. They need to feel safe before they can metabolise your sharpness. Ask if they want feedback before you give it.',
+  },
+  controlled: {
+    headline: 'They Challenge You',
+    dynamic: 'Their day-master element controls yours. They sharpen you, refine you, push you toward growth. This relationship will not let you stay comfortable — but you may also feel overpowered or criticised when they push too hard.',
+    advice: 'Name what you need. The controlling cycle is generative for your growth, but only if you can advocate for yourself within it. Tell them when their sharpness lands as criticism. The dynamic asks both of you to be conscious — them softer, you firmer.',
+  },
+  neutral: {
+    headline: 'Independent Elements',
+    dynamic: 'Your day-master elements neither generate nor control each other. There\'s no inherent tension and no inherent flow — the relationship is what you make of it, free of strong elemental pull either way.',
+    advice: 'You\'ll need to build your shared rhythm intentionally rather than rely on natural complementarity. The upside: no built-in friction to navigate. The work: choosing what you want this relationship to be, since the cosmos isn\'t pushing it in any direction.',
+  },
+};
+
 // Place validation lives in @utils/placeValidation — same City, State,
 // Country format the onboarding flow enforces.
+
+// Defensive markdown strip — Haiku occasionally emits headers / bold even
+// when the system prompt asks for plain prose, and the screen renders raw.
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/^---+\s*$/gm, '')
+    .trim();
+}
 
 export default function CompatibilityScreen() {
   const user = useAppStore(s => s.user);
@@ -54,6 +103,7 @@ export default function CompatibilityScreen() {
   const [score, setScore] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [partnerChartFailed, setPartnerChartFailed] = useState(false);
+  const [chineseModalOpen, setChineseModalOpen] = useState(false);
 
   // Local Chinese / BaZi match — instantly computed once partner DOB is confirmed.
   // No API call; deterministic from year branch + day stem of both DOBs.
@@ -173,11 +223,14 @@ export default function CompatibilityScreen() {
     }
 
     try {
-      const result = await getCompatibilityReading(
+      const raw = await getCompatibilityReading(
         { birthData: user.birthData, chart: user.chart },
         { birthData: partnerData, chart: partnerChart }
       );
-      // Extract score from response (Guru includes it as "SCORE: X/36")
+      const result = stripMarkdown(raw);
+      // Extract score from response (Guru includes it as "SCORE: X/36").
+      // Run on the stripped text — markdown wrappers around the score
+      // wouldn't break the regex, but stripping first keeps things clean.
       const scoreMatch = result.match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*36/i);
       if (scoreMatch) {
         setScore(parseFloat(scoreMatch[1]));
@@ -380,10 +433,19 @@ export default function CompatibilityScreen() {
           </View>
 
           {/* Chinese / BaZi match — appears once partner DOB is confirmed.
-              Pure local compute; complements the Vedic reading below. */}
+              Pure local compute; complements the Vedic reading below.
+              Tap opens a modal with deeper detail (zodiac match list,
+              element interplay explanation, navigation advice). */}
           {chineseMatch && (
-            <View style={[styles.chineseCard, styles[`chinese_${chineseMatch.zodiacLevel}` as const]]}>
-              <Text style={styles.chineseLabel}>CHINESE ASTROLOGY MATCH</Text>
+            <TouchableOpacity
+              style={[styles.chineseCard, styles[`chinese_${chineseMatch.zodiacLevel}` as const]]}
+              onPress={() => setChineseModalOpen(true)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.chineseHeaderRow}>
+                <Text style={styles.chineseLabel}>CHINESE ASTROLOGY MATCH</Text>
+                <Text style={styles.chineseTapHint}>Tap for detail →</Text>
+              </View>
               <View style={styles.chineseZodiacRow}>
                 <View style={styles.chineseZodiacBox}>
                   <Text style={styles.chineseZodiacChar}>{chineseMatch.yourZodiacChar}</Text>
@@ -404,7 +466,108 @@ export default function CompatibilityScreen() {
               <Text style={styles.chineseLevel}>{chineseLevelLabel(chineseMatch.zodiacLevel)}</Text>
               <Text style={styles.chineseSummary}>{chineseMatch.summary}</Text>
               <Text style={styles.chineseInterplay}>{chineseMatch.elementInterplayDescription}</Text>
-            </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Chinese match drill-down modal */}
+          {chineseMatch && (
+            <Modal
+              visible={chineseModalOpen}
+              animationType="slide"
+              presentationStyle="pageSheet"
+              onRequestClose={() => setChineseModalOpen(false)}
+            >
+              <SafeAreaView style={styles.modalContainer}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Chinese Astrology Match</Text>
+                  <TouchableOpacity onPress={() => setChineseModalOpen(false)} style={styles.modalClose}>
+                    <Text style={styles.modalCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView contentContainerStyle={{ padding: Spacing.md, paddingBottom: 60 }}>
+                  {/* Top: zodiac pair + level */}
+                  <View style={[styles.modalHero, styles[`chinese_${chineseMatch.zodiacLevel}` as const]]}>
+                    <View style={styles.chineseZodiacRow}>
+                      <View style={styles.chineseZodiacBox}>
+                        <Text style={styles.chineseZodiacChar}>{chineseMatch.yourZodiacChar}</Text>
+                        <Text style={styles.chineseZodiacName}>{chineseMatch.yourZodiac}</Text>
+                      </View>
+                      <Text style={styles.chineseConnector}>{chineseLevelGlyph(chineseMatch.zodiacLevel)}</Text>
+                      <View style={styles.chineseZodiacBox}>
+                        <Text style={styles.chineseZodiacChar}>{chineseMatch.partnerZodiacChar}</Text>
+                        <Text style={styles.chineseZodiacName}>{chineseMatch.partnerZodiac}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.chineseLevel}>{chineseLevelLabel(chineseMatch.zodiacLevel)}</Text>
+                    <Text style={styles.chineseSummary}>{chineseMatch.summary}</Text>
+                  </View>
+
+                  {/* Year zodiac compatibility detail */}
+                  <Text style={styles.modalSectionTitle}>YEAR ZODIAC COMPATIBILITY</Text>
+                  <Text style={styles.modalParagraph}>
+                    Your year zodiac shapes the broad social and ancestral energy each of you brings into the relationship — how you move through the world, what styles of company feel natural, the underlying tempo you each prefer.
+                  </Text>
+                  {(() => {
+                    const yourCompat = BAZI_COMPATIBILITY[chineseMatch.yourZodiac];
+                    const partnerCompat = BAZI_COMPATIBILITY[chineseMatch.partnerZodiac];
+                    return (
+                      <View style={styles.compatGrid}>
+                        <View style={styles.compatCol}>
+                          <Text style={styles.compatColTitle}>{chineseMatch.yourZodiacChar} {chineseMatch.yourZodiac}</Text>
+                          <Text style={styles.compatLabel}>Best matches</Text>
+                          <Text style={styles.compatList}>{yourCompat?.best.join(' · ') ?? '—'}</Text>
+                          <Text style={styles.compatLabel}>Challenging</Text>
+                          <Text style={styles.compatList}>{yourCompat?.challenging.join(' · ') ?? '—'}</Text>
+                        </View>
+                        <View style={styles.compatCol}>
+                          <Text style={styles.compatColTitle}>{chineseMatch.partnerZodiacChar} {chineseMatch.partnerZodiac}</Text>
+                          <Text style={styles.compatLabel}>Best matches</Text>
+                          <Text style={styles.compatList}>{partnerCompat?.best.join(' · ') ?? '—'}</Text>
+                          <Text style={styles.compatLabel}>Challenging</Text>
+                          <Text style={styles.compatList}>{partnerCompat?.challenging.join(' · ') ?? '—'}</Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
+
+                  {/* Day-master element interplay — the deeper layer */}
+                  {(() => {
+                    const detail = ELEMENT_INTERPLAY_DETAIL[chineseMatch.elementInterplay];
+                    const yourEl = ELEMENT_DATA[chineseMatch.yourDayElement];
+                    const partnerEl = ELEMENT_DATA[chineseMatch.partnerDayElement];
+                    return (
+                      <>
+                        <Text style={styles.modalSectionTitle}>DAY-MASTER ELEMENT INTERPLAY</Text>
+                        <Text style={styles.modalParagraph}>
+                          The day master is the central element of each person's BaZi chart — the core of how you engage with the world. How your two day-master elements interact reveals the deeper, daily-life dynamic of the relationship.
+                        </Text>
+                        <View style={styles.interplayRow}>
+                          <View style={[styles.interplayElem, { borderColor: yourEl?.color ?? Colors.gold }]}>
+                            <Text style={[styles.interplayElemChar, { color: yourEl?.color ?? Colors.gold }]}>{chineseMatch.yourDayMasterChar}</Text>
+                            <Text style={styles.interplayElemName}>{chineseMatch.yourDayMaster}</Text>
+                            <Text style={[styles.interplayElemSub, { color: yourEl?.color ?? Colors.gold }]}>{chineseMatch.yourDayElement}</Text>
+                          </View>
+                          <Text style={styles.interplayArrow}>↔</Text>
+                          <View style={[styles.interplayElem, { borderColor: partnerEl?.color ?? Colors.gold }]}>
+                            <Text style={[styles.interplayElemChar, { color: partnerEl?.color ?? Colors.gold }]}>{chineseMatch.partnerDayMasterChar}</Text>
+                            <Text style={styles.interplayElemName}>{chineseMatch.partnerDayMaster}</Text>
+                            <Text style={[styles.interplayElemSub, { color: partnerEl?.color ?? Colors.gold }]}>{chineseMatch.partnerDayElement}</Text>
+                          </View>
+                        </View>
+                        {detail && (
+                          <>
+                            <Text style={styles.modalSubsectionTitle}>{detail.headline}</Text>
+                            <Text style={styles.modalParagraph}>{detail.dynamic}</Text>
+                            <Text style={styles.modalSubsectionTitle}>How to navigate</Text>
+                            <Text style={styles.modalParagraph}>{detail.advice}</Text>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
+                </ScrollView>
+              </SafeAreaView>
+            </Modal>
           )}
 
           {/* Score display */}
@@ -559,7 +722,30 @@ const styles = StyleSheet.create({
   chinese_good:        { borderColor: Colors.cardBorder },
   chinese_neutral:     { borderColor: Colors.mutedDark },
   chinese_challenging: { borderColor: Colors.amber },
-  chineseLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 12, textAlign: 'center' },
+  chineseHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  chineseLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel },
+  chineseTapHint: { fontSize: 10, letterSpacing: 1, color: Colors.gold, fontFamily: Fonts.cinzel, opacity: 0.7 },
+  // Drill-down modal
+  modalContainer: { flex: 1, backgroundColor: Colors.midnight },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  modalTitle: { fontSize: 18, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 0.5 },
+  modalClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  modalCloseText: { fontSize: 18, color: Colors.muted },
+  modalHero: { backgroundColor: Colors.card, borderWidth: 1.5, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md },
+  modalSectionTitle: { fontSize: 11, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginTop: Spacing.md, marginBottom: 8 },
+  modalSubsectionTitle: { fontSize: 12, letterSpacing: 1, color: Colors.star, fontFamily: Fonts.cinzel, marginTop: 12, marginBottom: 6 },
+  modalParagraph: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, opacity: 0.9, marginBottom: 8 },
+  compatGrid: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  compatCol: { flex: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 12, gap: 4 },
+  compatColTitle: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.gold, marginBottom: 6, letterSpacing: 0.3 },
+  compatLabel: { fontSize: 9, letterSpacing: 1.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginTop: 6 },
+  compatList: { fontSize: 12, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 18, opacity: 0.85 },
+  interplayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginVertical: 12, gap: 12 },
+  interplayElem: { flex: 1, alignItems: 'center', borderWidth: 1.5, borderRadius: Radius.md, padding: 14, gap: 4 },
+  interplayElemChar: { fontSize: 32, fontFamily: Fonts.cinzel },
+  interplayElemName: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.star, letterSpacing: 0.3 },
+  interplayElemSub: { fontSize: 11, fontFamily: Fonts.cinzel, opacity: 0.85, letterSpacing: 0.5 },
+  interplayArrow: { fontSize: 22, color: Colors.muted },
   chineseZodiacRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   chineseZodiacBox: { flex: 1, alignItems: 'center', gap: 4 },
   chineseZodiacChar: { fontSize: 36, color: Colors.gold, fontFamily: Fonts.cinzel },

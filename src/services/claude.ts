@@ -37,6 +37,11 @@ const REQUEST_TIMEOUT_MS = 30000;
 // compresses at quality 0.8). On cellular this can take well over 30s for the
 // upload alone before the model even responds, so the palm path gets longer.
 const IMAGE_REQUEST_TIMEOUT_MS = 60000;
+// Compatibility readings produce 8-Koota analysis + 5 prose sections + a
+// Chinese overlay weave; even on Haiku this lands around 25-35s for a
+// complete response. Give it the same 60s budget as palm so users see
+// the reading instead of a "took too long" error.
+const LONG_READING_TIMEOUT_MS = 60000;
 
 interface ClaudeMessage {
   role: 'user' | 'assistant';
@@ -61,6 +66,9 @@ async function callClaude(
   // Override the default Sonnet model. Used by readings that don't need
   // Sonnet's reasoning depth (Lal Kitab remedies, future fast paths).
   model: string = MODEL,
+  // Per-call timeout override. Default 30s; long-form readings
+  // (compatibility, palm) bump this to allow the model time to complete.
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<string> {
   const authHeader = await buildAuthHeader();
 
@@ -78,7 +86,7 @@ async function callClaude(
       'x-naksha-auth': authHeader,
     },
     body: JSON.stringify({ model, max_tokens: maxTokens, system: systemPayload, messages }),
-  }, REQUEST_TIMEOUT_MS);
+  }, timeoutMs);
 
   if (!response.ok) {
     let errMessage = 'Service temporarily unavailable. Please try again.';
@@ -510,8 +518,14 @@ Calculate the Ashtakoota score based on the 8 Kootas (matching criteria) from bo
 7. Bhakoot (love/wealth) — 7 points max
 8. Nadi (health/genes) — 8 points max
 
-Be as accurate as possible based on the Moon Nakshatra positions. After the score line, write in plain, warm English that anyone can understand. No jargon. Be honest but compassionate.`;
+Be as accurate as possible based on the Moon Nakshatra positions. After the score line, write in plain, warm English that anyone can understand. No jargon. Be honest but compassionate. Plain prose only — no markdown formatting (no #, ##, ### headers; no **bold**; no horizontal rules; no bullet lists). Use plain paragraphs separated by blank lines.`;
 
+  // Compatibility was on Sonnet @1800 — taking ~40s and truncating
+  // (stop_reason: max_tokens). The 30s app timeout fired before the
+  // response arrived, so users saw the timeout error and never the reading.
+  // Switched to Haiku with a 2400-token cap and the long-reading 60s
+  // timeout. Tightened the prompt to ask for "key Koota highlights"
+  // instead of all 8, which keeps the reading complete in 25-30s on Haiku.
   return callClaude(system, [{
     role: 'user',
     content: `Analyze the compatibility between these two people. Lead with Vedic (Ashtakoota Milan) and weave in the precomputed Chinese (BaZi) overlay where it adds insight — don't treat them as separate readings.
@@ -524,14 +538,14 @@ ${getChartSummary(person1.birthData, person1.chart)}
 ${person2.birthData.name}
 ${getChartSummary(person2.birthData, person2.chart)}
 ${chineseBlock ? '\n' + chineseBlock : ''}
-Start with the SCORE: X/36 line, then provide a brief breakdown of how they scored on each of the 8 Kootas (one line each, in plain English — what each means for their relationship).
+Start with the SCORE: X/36 line. Then call out the 2-3 strongest Kootas and the 1-2 weakest in plain English — what each means for the relationship. Don't list all 8.
 
 Then cover: what naturally draws these two together; their deepest compatibility strengths; areas that will need patience and understanding; how their current life phases (Mahadasha periods) affect the relationship right now; and practical advice for building a strong relationship together.
 
 Where the Chinese overlay reinforces or contrasts the Vedic reading, weave it in — for example, mention if the year zodiacs sit in a classic supportive triad or if the day-master elements are in a generating/controlling cycle. Use this to enrich the reading, never to contradict the Vedic core.
 
-Be honest, specific to their charts, and encouraging.`,
-  }], 1800);
+Be honest, specific to their charts, and encouraging. Keep it tight — every sentence should earn its place.`,
+  }], 2400, undefined, FAST_MODEL, LONG_READING_TIMEOUT_MS);
 }
 
 // ─── Tarot Reading ────────────────────────────────────────────────────────────
