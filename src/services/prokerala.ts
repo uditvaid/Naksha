@@ -468,6 +468,81 @@ export async function getPanchang(
   return promise;
 }
 
+// ─── Auspicious / inauspicious time windows ──────────────────────────────────
+
+export interface MuhuratWindow {
+  /** Prokerala id (1-8). Stable per muhurat name across days. */
+  id: number;
+  /** Sanskrit name as Prokerala returns it, e.g. "Abhijit Muhurat", "Rahu". */
+  name: string;
+  /** "Auspicious" | "Inauspicious" */
+  type: string;
+  /** Some muhurats split into multiple windows in a day (e.g. Dur Muhurat). */
+  windows: { start: string; end: string }[];
+}
+
+export interface AuspiciousPeriodsData {
+  auspicious: MuhuratWindow[];
+  inauspicious: MuhuratWindow[];
+  /** ISO YYYY-MM-DD this represents. */
+  date: string;
+}
+
+let _periodsCache: { key: string; data: AuspiciousPeriodsData } | null = null;
+let _periodsInflight: { key: string; promise: Promise<AuspiciousPeriodsData> } | null = null;
+
+export async function getAuspiciousPeriods(
+  birthData: BirthData,
+  date: Date = new Date(),
+): Promise<AuspiciousPeriodsData> {
+  const isoDate = date.toISOString().split('T')[0]!;
+  // Cache by date + rounded coords — same as panchang. Times of day shift
+  // by location, so coords matter; date matters because they reset daily.
+  const key = `${isoDate}|${birthData.latitude.toFixed(2)},${birthData.longitude.toFixed(2)}`;
+  if (_periodsCache?.key === key) return _periodsCache.data;
+  if (_periodsInflight?.key === key) return _periodsInflight.promise;
+
+  // Local-noon anchors the response to the requested date regardless of UTC drift.
+  const datetime = formatDateTime(isoDate, '12:00', birthData.timezone);
+  const params = {
+    datetime,
+    coordinates: `${birthData.latitude},${birthData.longitude}`,
+    ayanamsa: '1',
+    la: 'en',
+  };
+
+  const promise = (async () => {
+    try {
+      if (__DEV__) console.log(`[Periods] fetching for ${isoDate} @ ${params.coordinates}`);
+      // Both endpoints in parallel — they don't share state.
+      const [ausRaw, inausRaw] = await Promise.all([
+        prokeralaGet('auspicious-period', params).catch((e) => { if (__DEV__) console.warn('[Periods] auspicious failed:', e?.message); return null; }),
+        prokeralaGet('inauspicious-period', params).catch((e) => { if (__DEV__) console.warn('[Periods] inauspicious failed:', e?.message); return null; }),
+      ]);
+
+      const normalise = (raw: any): MuhuratWindow[] => (raw?.muhurat ?? []).map((m: any) => ({
+        id: m.id,
+        name: m.name ?? '',
+        type: m.type ?? '',
+        windows: (m.period ?? []).map((p: any) => ({ start: p.start, end: p.end })),
+      }));
+
+      const data: AuspiciousPeriodsData = {
+        auspicious: normalise(ausRaw),
+        inauspicious: normalise(inausRaw),
+        date: isoDate,
+      };
+      if (__DEV__) console.log(`[Periods] got ${data.auspicious.length} aus + ${data.inauspicious.length} inaus`);
+      _periodsCache = { key, data };
+      return data;
+    } finally {
+      if (_periodsInflight?.key === key) _periodsInflight = null;
+    }
+  })();
+  _periodsInflight = { key, promise };
+  return promise;
+}
+
 // ─── Sade Sati / Saturn challenging transit ──────────────────────────────────
 
 export interface SadeSatiData {

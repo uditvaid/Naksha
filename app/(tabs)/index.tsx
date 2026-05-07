@@ -11,6 +11,7 @@ import { DailyShareButton } from '@components/DailyShareButton';
 import { useDailyContinuityStore, DailyRecord } from '@store/dailyContinuityStore';
 import { todaysAffirmation, todaysFocus } from '@lib/dailyAffirmation';
 import { usePanchang, panchangSummaryLine } from '@lib/panchang';
+import { AuspiciousPeriodsCard } from '@components/AuspiciousPeriodsCard';
 import { findActiveDasha, findActiveAntardasha } from '@utils/vedic';
 
 function stripMarkdown(text: string): string {
@@ -305,6 +306,11 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
+
+        {/* Today's auspicious + inauspicious time windows.
+            Renders nothing while loading; tap to see plain-English
+            explanation of each window's purpose. */}
+        <AuspiciousPeriodsCard birthData={birthData} nowTick={nowTick} />
 
         {/* Daily Reading — preview card, tap to expand */}
         <View style={styles.section}>
