@@ -75,7 +75,7 @@ const DETAILS: Record<string, MuhuratDetail> = {
     sanskrit: 'Gulika Kalam',
   },
   'dur muhurat': {
-    shortLabel: 'Hold off difficult conversations',
+    shortLabel: 'Avoid sensitive talks',
     meaning: 'Short windows of friction in the day. If you can, push delicate conversations or sensitive negotiations to another time.',
     sanskrit: 'Dur Muhurat',
   },

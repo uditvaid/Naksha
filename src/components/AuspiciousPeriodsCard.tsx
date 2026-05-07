@@ -41,7 +41,7 @@ export function AuspiciousPeriodsCard({ birthData, nowTick }: Props) {
               const d = muhuratDetail(m.name);
               return (
                 <View key={`a-${m.id}`} style={styles.windowRow}>
-                  <Text style={styles.windowLabel} numberOfLines={1}>{d.shortLabel}</Text>
+                  <Text style={styles.windowLabel} numberOfLines={2}>{d.shortLabel}</Text>
                   <Text style={styles.windowTime} numberOfLines={1}>{formatWindows(m.windows)}</Text>
                 </View>
               );
@@ -57,7 +57,7 @@ export function AuspiciousPeriodsCard({ birthData, nowTick }: Props) {
               const d = muhuratDetail(m.name);
               return (
                 <View key={`i-${m.id}`} style={styles.windowRow}>
-                  <Text style={styles.windowLabel} numberOfLines={1}>{d.shortLabel}</Text>
+                  <Text style={styles.windowLabel} numberOfLines={2}>{d.shortLabel}</Text>
                   <Text style={styles.windowTime} numberOfLines={1}>{formatWindows(m.windows)}</Text>
                 </View>
               );
@@ -91,15 +91,11 @@ export function AuspiciousPeriodsCard({ birthData, nowTick }: Props) {
               const d = muhuratDetail(m.name);
               return (
                 <View key={`am-${m.id}`} style={[styles.detailCard, { borderColor: Colors.gold + '40' }]}>
-                  <View style={styles.detailHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.detailLabel}>{d.shortLabel}</Text>
-                      <Text style={styles.detailSanskrit}>{d.sanskrit}</Text>
-                    </View>
-                    <Text style={[styles.detailTime, { color: Colors.gold }]}>
-                      {formatWindows(m.windows)}
-                    </Text>
-                  </View>
+                  <Text style={styles.detailLabel}>{d.shortLabel}</Text>
+                  <Text style={styles.detailSanskrit}>{d.sanskrit}</Text>
+                  <Text style={[styles.detailTime, { color: Colors.gold }]}>
+                    {formatWindows(m.windows)}
+                  </Text>
                   {d.meaning ? <Text style={styles.detailMeaning}>{d.meaning}</Text> : null}
                 </View>
               );
@@ -110,15 +106,11 @@ export function AuspiciousPeriodsCard({ birthData, nowTick }: Props) {
               const d = muhuratDetail(m.name);
               return (
                 <View key={`im-${m.id}`} style={[styles.detailCard, { borderColor: Colors.amber + '40' }]}>
-                  <View style={styles.detailHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.detailLabel}>{d.shortLabel}</Text>
-                      <Text style={styles.detailSanskrit}>{d.sanskrit}</Text>
-                    </View>
-                    <Text style={[styles.detailTime, { color: Colors.amber }]}>
-                      {formatWindows(m.windows)}
-                    </Text>
-                  </View>
+                  <Text style={styles.detailLabel}>{d.shortLabel}</Text>
+                  <Text style={styles.detailSanskrit}>{d.sanskrit}</Text>
+                  <Text style={[styles.detailTime, { color: Colors.amber }]}>
+                    {formatWindows(m.windows)}
+                  </Text>
                   {d.meaning ? <Text style={styles.detailMeaning}>{d.meaning}</Text> : null}
                 </View>
               );
@@ -135,7 +127,7 @@ export function AuspiciousPeriodsCard({ birthData, nowTick }: Props) {
 }
 
 const styles = StyleSheet.create({
-  section: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
+  section: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.lg },
   sectionTitle: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 8 },
   card: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md, gap: 10 },
   columnsRow: { flexDirection: 'row', gap: 12 },
@@ -154,11 +146,10 @@ const styles = StyleSheet.create({
   modalCloseText: { fontSize: 18, color: Colors.muted },
   modalIntro: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 22, marginBottom: Spacing.md },
   modalSectionTitle: { fontSize: 11, letterSpacing: 2, fontFamily: Fonts.cinzel, marginTop: Spacing.lg, marginBottom: 8 },
-  detailCard: { backgroundColor: Colors.card, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm, gap: 6 },
-  detailHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  detailLabel: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star, letterSpacing: 0.3 },
+  detailCard: { backgroundColor: Colors.card, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.sm },
+  detailLabel: { fontSize: 15, fontFamily: Fonts.cinzel, color: Colors.star, letterSpacing: 0.3 },
   detailSanskrit: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cinzel, letterSpacing: 0.5, marginTop: 2 },
-  detailTime: { fontSize: 13, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
-  detailMeaning: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20, opacity: 0.85, marginTop: 2 },
+  detailTime: { fontSize: 15, fontFamily: Fonts.cinzel, letterSpacing: 0.3, marginTop: 8 },
+  detailMeaning: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 20, opacity: 0.85, marginTop: 8 },
   modalFooter: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, lineHeight: 18, marginTop: Spacing.md, opacity: 0.7, textAlign: 'center' },
 });
