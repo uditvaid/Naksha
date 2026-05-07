@@ -468,6 +468,68 @@ export async function getPanchang(
   return promise;
 }
 
+// ─── Sade Sati / Saturn challenging transit ──────────────────────────────────
+
+export interface SadeSatiData {
+  /** True when the user is currently inside any of Saturn's challenging
+   *  Moon-relative transits (Sade Sati phases, Ashtama Sani, Kantaka Sani). */
+  isInTransit: boolean;
+  /** Raw Prokerala phase label — one of "rising" / "peak" / "setting" /
+   *  "Ashtama Sani" / "Kantaka Sani" / "Janma Sani" / null. Translated to
+   *  plain English in src/lib/sadeSati.ts. */
+  phase: string | null;
+  /** Prokerala's clinical description, kept for the "classical perspective"
+   *  footnote in the modal. */
+  description: string;
+}
+
+// Saturn moves ~30 arcmin/day; the answer doesn't shift between morning and
+// evening for the same user. One fetch per session is plenty. Cached by the
+// rounded coords + ISO date so a chart regenerate (lat/lon change) busts it.
+let _sadeSatiCache: { key: string; data: SadeSatiData } | null = null;
+let _sadeSatiInflight: { key: string; promise: Promise<SadeSatiData> } | null = null;
+
+export async function getSadeSati(
+  birthData: BirthData,
+  date: Date = new Date(),
+): Promise<SadeSatiData> {
+  const isoDate = date.toISOString().split('T')[0]!;
+  const key = `${isoDate}|${birthData.latitude.toFixed(2)},${birthData.longitude.toFixed(2)}|${birthData.dateOfBirth}|${birthData.timeOfBirth}`;
+  if (_sadeSatiCache?.key === key) return _sadeSatiCache.data;
+  if (_sadeSatiInflight?.key === key) return _sadeSatiInflight.promise;
+
+  // Sade Sati needs the user's natal datetime + coords (Moon longitude is
+  // computed from those). The query datetime is the moment we're asking
+  // about — passing the user's birth datetime gives Prokerala both, since
+  // their endpoint resolves Saturn's CURRENT transit and the natal Moon
+  // from the same input.
+  const natalDatetime = formatDateTime(birthData.dateOfBirth, birthData.timeOfBirth, birthData.timezone);
+  const params = {
+    datetime: natalDatetime,
+    coordinates: `${birthData.latitude},${birthData.longitude}`,
+    ayanamsa: '1',
+  };
+
+  const promise = (async () => {
+    try {
+      if (__DEV__) console.log(`[SadeSati] fetching for natal ${natalDatetime}`);
+      const raw = await prokeralaGet('sade-sati', params);
+      if (__DEV__) console.log(`[SadeSati] in_transit=${raw?.is_in_sade_sati} phase=${raw?.transit_phase}`);
+      const data: SadeSatiData = {
+        isInTransit: !!raw?.is_in_sade_sati,
+        phase: raw?.transit_phase ?? null,
+        description: raw?.description ?? '',
+      };
+      _sadeSatiCache = { key, data };
+      return data;
+    } finally {
+      if (_sadeSatiInflight?.key === key) _sadeSatiInflight = null;
+    }
+  })();
+  _sadeSatiInflight = { key, promise };
+  return promise;
+}
+
 // ─── Main chart generation ────────────────────────────────────────────────────
 
 export async function generateChart(birthData: BirthData): Promise<ChartData> {

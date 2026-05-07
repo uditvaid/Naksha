@@ -13,6 +13,7 @@ import { PLANETS_BY_ID } from '@constants/astrology';
 import { askGuru } from '@services/claude';
 import { generateChart } from '@services/prokerala';
 import { findActiveDasha } from '@utils/vedic';
+import { SadeSatiCard } from '@components/SadeSatiCard';
 
 // ─── Lagna (Rising Sign) descriptions ────────────────────────────────────────
 
@@ -641,6 +642,12 @@ export default function ChartScreen() {
 
         {/* ── Dashas tab ── */}
         {activeTab === 'Dashas' && (
+          <>
+            {/* Saturn challenging-transit card — appears above the dasha
+                rows ONLY when the user is currently in Sade Sati / Ashtama
+                Sani / Kantaka Sani. Silent absence otherwise. */}
+            <SadeSatiCard birthData={user.birthData} />
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>YOUR PLANETARY PERIODS</Text>
             <Text style={styles.sectionSubtitle}>
@@ -702,6 +709,7 @@ export default function ChartScreen() {
               })
             )}
           </View>
+          </>
         )}
 
         {/* ── Yogas tab ── */}
