@@ -4,7 +4,7 @@
  * OAuth2 client credentials flow
  */
 
-import { BirthData, ChartData, PlanetPosition, DashaPeriod } from '@store/userStore';
+import { BirthData, ChartData, PlanetPosition, DashaPeriod, onAppReset } from '@store/userStore';
 import { NAKSHATRAS, MAHADASHA_YEARS } from '@constants/astrology';
 import { PROXY_BASE_URL } from '@constants/config';
 import { buildAuthHeader } from './auth';
@@ -1270,3 +1270,28 @@ function buildFallbackDashas(planets: PlanetPosition[], birthData: BirthData): D
   const moonDeg = moon ? moon.signIndex * 30 + moon.degree : 90;
   return calculateVimshottariDasha(moonDeg, new Date(birthData.dateOfBirth));
 }
+
+// ─── Cache reset on sign-out / data reset ────────────────────────────────────
+
+/**
+ * Clear every Prokerala in-memory cache. Called by the app-reset registry
+ * when the user signs out or wipes their data — without this, the next
+ * sign-in would briefly serve the previous user's cached data before its
+ * cache key mismatched and refetched.
+ */
+export function clearProkeralaCaches(): void {
+  _panchangCache = null;
+  _panchangInflight = null;
+  _periodsCache = null;
+  _periodsInflight = null;
+  _chandraBalaCache = null;
+  _chandraBalaInflight = null;
+  _mangalCache = null;
+  _mangalInflight = null;
+  _sadeSatiCache = null;
+  _sadeSatiInflight = null;
+  _ashtaKootaCache = null;
+  _ashtaKootaInflight = null;
+}
+
+onAppReset(clearProkeralaCaches);

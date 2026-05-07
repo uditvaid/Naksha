@@ -315,7 +315,15 @@ export async function getDailyReading(
   // Chandra Bala — adds Moon-transit favourability flavour to the prompt.
   // Cached service so a second call within the day is free. Swallows any
   // failure so a flaky API doesn't block the reading.
-  const chandraBalaLine = await getChandraBalaPromptLine(birthData, today);
+  //
+  // Race against a 4-second budget: this is secondary context (the
+  // reading still works without it), but the underlying Prokerala
+  // request has a 15s timeout. Without this race, a slow secondary
+  // input would delay the user-facing reading by up to 15s.
+  const chandraBalaLine = await Promise.race([
+    getChandraBalaPromptLine(birthData, today),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+  ]);
 
   // The whole system prompt here is stable per (user, chart) — birth data,
   // planets, persona derivation. Cache the entire thing as the prefix so a
