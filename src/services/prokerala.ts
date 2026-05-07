@@ -530,6 +530,115 @@ export async function getSadeSati(
   return promise;
 }
 
+// ─── Ashta-koota / kundli matching ───────────────────────────────────────────
+
+export interface AshtaKootaArea {
+  /** 1-8: Varna, Vasya, Tara, Yoni, Graha Maitri, Gana, Bhakoot, Nadi. */
+  id: number;
+  /** Sanskrit name as Prokerala returns it, e.g. "Varna Koot". */
+  name: string;
+  /** Categorical bucket each partner falls into (e.g. "Vaishya" / "Shudra"). */
+  girlBucket: string;
+  boyBucket: string;
+  /** Points obtained out of max (rounded as Prokerala returns floats). */
+  obtainedPoints: number;
+  maximumPoints: number;
+  /** Prokerala's classical-style explanation of this koota's match. */
+  description: string;
+}
+
+export interface MangalDoshaInfo {
+  hasDosha: boolean;
+  hasException: boolean;
+  doshaType: string | null;
+  description: string;
+}
+
+export interface AshtaKootaData {
+  totalPoints: number;
+  maximumPoints: number;
+  /** Overall verdict text from Prokerala (e.g. "Union is Compatible..."). */
+  verdict: string;
+  /** "good" | "average" | "bad" — used to colour the badge. */
+  verdictType: string;
+  areas: AshtaKootaArea[];
+  girlMangalDosha: MangalDoshaInfo;
+  boyMangalDosha: MangalDoshaInfo;
+}
+
+let _ashtaKootaCache: { key: string; data: AshtaKootaData } | null = null;
+let _ashtaKootaInflight: { key: string; promise: Promise<AshtaKootaData> } | null = null;
+
+export async function getAshtaKoota(
+  girl: BirthData,
+  boy: BirthData,
+): Promise<AshtaKootaData> {
+  // Cache key is birth-data-only — Ashta-koota doesn't change by date, so
+  // the same partner-pair always resolves the same answer.
+  const key =
+    `${girl.dateOfBirth}|${girl.timeOfBirth}|${girl.latitude.toFixed(2)},${girl.longitude.toFixed(2)}` +
+    `→${boy.dateOfBirth}|${boy.timeOfBirth}|${boy.latitude.toFixed(2)},${boy.longitude.toFixed(2)}`;
+  if (_ashtaKootaCache?.key === key) return _ashtaKootaCache.data;
+  if (_ashtaKootaInflight?.key === key) return _ashtaKootaInflight.promise;
+
+  // Prokerala's gender-named params predate modern usage; we keep the
+  // `girl_*` / `boy_*` mapping as the API requires it. The classical
+  // Ashtakoota rules are gendered in Vedic tradition, so the API doesn't
+  // accept symmetric params.
+  const params = {
+    girl_dob: formatDateTime(girl.dateOfBirth, girl.timeOfBirth, girl.timezone),
+    girl_coordinates: `${girl.latitude},${girl.longitude}`,
+    boy_dob: formatDateTime(boy.dateOfBirth, boy.timeOfBirth, boy.timezone),
+    boy_coordinates: `${boy.latitude},${boy.longitude}`,
+    ayanamsa: '1',
+    la: 'en',
+  };
+
+  const promise = (async () => {
+    try {
+      if (__DEV__) console.log('[AshtaKoota] fetching for partner pair');
+      const raw = await prokeralaGet('kundli-matching/advanced', params);
+      if (__DEV__) console.log(`[AshtaKoota] total=${raw?.guna_milan?.total_points}/${raw?.guna_milan?.maximum_points}`);
+
+      const areas: AshtaKootaArea[] = (raw?.guna_milan?.guna ?? []).map((g: any) => ({
+        id: g.id,
+        name: g.name ?? '',
+        girlBucket: g.girl_koot ?? '',
+        boyBucket: g.boy_koot ?? '',
+        obtainedPoints: Number(g.obtained_points ?? 0),
+        maximumPoints: Number(g.maximum_points ?? 0),
+        description: g.description ?? '',
+      }));
+
+      const data: AshtaKootaData = {
+        totalPoints: Number(raw?.guna_milan?.total_points ?? 0),
+        maximumPoints: Number(raw?.guna_milan?.maximum_points ?? 36),
+        verdict: raw?.message?.description ?? '',
+        verdictType: raw?.message?.type ?? '',
+        areas,
+        girlMangalDosha: {
+          hasDosha: !!raw?.girl_mangal_dosha_details?.has_dosha,
+          hasException: !!raw?.girl_mangal_dosha_details?.has_exception,
+          doshaType: raw?.girl_mangal_dosha_details?.dosha_type ?? null,
+          description: raw?.girl_mangal_dosha_details?.description ?? '',
+        },
+        boyMangalDosha: {
+          hasDosha: !!raw?.boy_mangal_dosha_details?.has_dosha,
+          hasException: !!raw?.boy_mangal_dosha_details?.has_exception,
+          doshaType: raw?.boy_mangal_dosha_details?.dosha_type ?? null,
+          description: raw?.boy_mangal_dosha_details?.description ?? '',
+        },
+      };
+      _ashtaKootaCache = { key, data };
+      return data;
+    } finally {
+      if (_ashtaKootaInflight?.key === key) _ashtaKootaInflight = null;
+    }
+  })();
+  _ashtaKootaInflight = { key, promise };
+  return promise;
+}
+
 // ─── Main chart generation ────────────────────────────────────────────────────
 
 export async function generateChart(birthData: BirthData): Promise<ChartData> {

@@ -8,7 +8,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { getCompatibilityReading } from '@services/claude';
-import { geocodePlace, generateChart, PlaceNotFoundError } from '@services/prokerala';
+import { geocodePlace, generateChart, getAshtaKoota, PlaceNotFoundError } from '@services/prokerala';
+import { AshtakootaCard } from '@components/AshtakootaCard';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { getChineseCompatibility, ELEMENT_DATA, BAZI_COMPATIBILITY, type ZodiacLevel } from '@utils/bazi';
 import { validatePlace, PLACE_FORMAT_EXAMPLES } from '@utils/placeValidation';
@@ -100,7 +101,7 @@ export default function CompatibilityScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [partnerPlace, setPartnerPlace] = useState('');
   const [reading, setReading] = useState('');
-  const [score, setScore] = useState<number | null>(null);
+  const [partnerBirthData, setPartnerBirthData] = useState<BirthData | null>(null);
   const [loading, setLoading] = useState(false);
   const [partnerChartFailed, setPartnerChartFailed] = useState(false);
   const [chineseModalOpen, setChineseModalOpen] = useState(false);
@@ -184,7 +185,7 @@ export default function CompatibilityScreen() {
     }
 
     setLoading(true);
-    setScore(null);
+    setPartnerBirthData(null);
 
     const place = partnerPlace.trim();
     let geo;
@@ -213,28 +214,24 @@ export default function CompatibilityScreen() {
       timezone: geo.timezone,
     };
 
-    // Generate partner's chart
+    // Generate partner's chart + the deterministic Ashta-koota score in
+    // parallel — both feed into the Claude prompt below. AshtakootaCard's
+    // useAshtaKoota hook will hit the same in-memory cache so the score
+    // card renders instantly when partnerBirthData lands.
     setPartnerChartFailed(false);
-    let partnerChart: ChartData | null = null;
-    try {
-      partnerChart = await generateChart(partnerData);
-    } catch {
-      setPartnerChartFailed(true);
-    }
+    setPartnerBirthData(partnerData);
+    const [partnerChart, ashtaKoota] = await Promise.all([
+      generateChart(partnerData).catch(() => { setPartnerChartFailed(true); return null; }),
+      getAshtaKoota(user.birthData, partnerData).catch(() => null),
+    ]);
 
     try {
       const raw = await getCompatibilityReading(
         { birthData: user.birthData, chart: user.chart },
-        { birthData: partnerData, chart: partnerChart }
+        { birthData: partnerData, chart: partnerChart },
+        ashtaKoota,
       );
       const result = stripMarkdown(raw);
-      // Extract score from response (Guru includes it as "SCORE: X/36").
-      // Run on the stripped text — markdown wrappers around the score
-      // wouldn't break the regex, but stripping first keeps things clean.
-      const scoreMatch = result.match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*36/i);
-      if (scoreMatch) {
-        setScore(parseFloat(scoreMatch[1]));
-      }
       setReading(result);
       saveReading({
         type: 'compatibility',
@@ -570,26 +567,16 @@ export default function CompatibilityScreen() {
             </Modal>
           )}
 
-          {/* Score display */}
-          {reading !== '' && score === null && (
-            <View style={styles.scoreSection}>
-              <Text style={styles.scoreDesc}>Ashtakoota score not available — see reading below for compatibility insights.</Text>
-            </View>
-          )}
-          {score !== null && (
-            <View style={styles.scoreSection}>
-              <View style={styles.scoreCircle}>
-                <Text style={styles.scoreValue}>{score}</Text>
-                <Text style={styles.scoreTotal}>/36</Text>
-              </View>
-              <Text style={styles.scoreLabel}>ASHTAKOOTA SCORE</Text>
-              <Text style={styles.scoreDesc}>
-                {score >= 28 ? 'Excellent match — deep natural harmony'
-                  : score >= 21 ? 'Very good match — strong compatibility'
-                  : score >= 15 ? 'Good match — some areas need attention'
-                  : 'Challenging match — requires understanding and effort'}
-              </Text>
-            </View>
+          {/* Deterministic Ashta-koota score from Prokerala — appears once
+              partnerBirthData lands (set inside analyze() before the Claude
+              call). Replaces the previous regex-from-Claude-prose score with
+              an authoritative breakdown across 8 koota areas. */}
+          {partnerBirthData && (
+            <AshtakootaCard
+              me={user.birthData}
+              partner={partnerBirthData}
+              partnerDisplayName={partnerName.trim()}
+            />
           )}
 
           {/* Reading result */}
@@ -608,7 +595,7 @@ export default function CompatibilityScreen() {
                 style={styles.newReadingBtn}
                 onPress={() => {
                   setReading('');
-                  setScore(null);
+                  setPartnerBirthData(null);
                   setPartnerChartFailed(false);
                   setPartnerName('');
                   setPartnerDate(new Date(1990, 0, 1));
@@ -698,14 +685,6 @@ const styles = StyleSheet.create({
   },
   analyzeBtnDisabled: { opacity: 0.4 },
   analyzeBtnText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5 },
-
-  // Score
-  scoreSection: { alignItems: 'center', marginHorizontal: Spacing.md, marginBottom: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gold, borderRadius: Radius.xl, padding: Spacing.lg },
-  scoreCircle: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 },
-  scoreValue: { fontSize: 48, fontFamily: Fonts.cinzel, color: Colors.gold },
-  scoreTotal: { fontSize: 20, fontFamily: Fonts.cinzel, color: Colors.muted, marginLeft: 2 },
-  scoreLabel: { fontSize: 10, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 6 },
-  scoreDesc: { fontSize: 13, color: Colors.star, fontFamily: Fonts.cormorantItalic, textAlign: 'center' },
 
   // Chinese match card
   chineseCard: {

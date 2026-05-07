@@ -471,9 +471,12 @@ Write in plain, warm English. Share: which areas of their life are flowing easil
 
 // ─── Compatibility ────────────────────────────────────────────────────────────
 
+import type { AshtaKootaData } from './prokerala';
+
 export async function getCompatibilityReading(
   person1: { birthData: BirthData; chart: ChartData | null },
-  person2: { birthData: BirthData; chart: ChartData | null }
+  person2: { birthData: BirthData; chart: ChartData | null },
+  ashtaKoota: AshtaKootaData | null = null,
 ): Promise<string> {
   const getChartSummary = (bd: BirthData, chart: ChartData | null) => {
     if (!chart) return `Born ${formatDate(bd.dateOfBirth)} at ${bd.timeOfBirth}, ${bd.placeOfBirth} (chart not calculated)`;
@@ -503,22 +506,27 @@ Day-element interplay: ${ch.elementInterplay} — ${ch.elementInterplayDescripti
     // No Chinese block if dates can't be parsed — Vedic reading still proceeds.
   }
 
+  // Authoritative Ashta-koota score from Prokerala when available. The UI
+  // shows the per-koota breakdown card directly above this prose, so we no
+  // longer ask Claude to calculate or display a score — the prose is now
+  // pure interpretation, anchored to the deterministic numbers above.
+  let ashtaBlock = '';
+  if (ashtaKoota) {
+    const lines = ashtaKoota.areas.map(a =>
+      `${a.name}: ${a.obtainedPoints}/${a.maximumPoints} — ${person1.birthData.name} ${a.girlBucket} vs ${person2.birthData.name} ${a.boyBucket}`,
+    ).join('\n');
+    ashtaBlock = `═══ Ashtakoota Milan (precomputed, deterministic) ═══
+Total: ${ashtaKoota.totalPoints}/${ashtaKoota.maximumPoints}
+Verdict: ${ashtaKoota.verdict}
+${lines}
+`;
+  }
+
   const system = `You are a warm, insightful guide helping people understand their relationships through both Vedic (Ashtakoota Milan) and Chinese (BaZi) astrological analysis.
 
-IMPORTANT: You MUST begin your response with the Ashtakoota compatibility score on its own line in this exact format:
-SCORE: X/36
+The Ashtakoota score is provided in the user message — do NOT recalculate it, do NOT print "SCORE: X/36", and do NOT list all 8 kootas with numbers (the UI already shows the breakdown above your reading). Your job is the interpretation: what the strong matches give the relationship, what the weaker areas ask the couple to work with, and how the living chart context (dasha periods, Chinese overlay) shapes the present moment.
 
-Calculate the Ashtakoota score based on the 8 Kootas (matching criteria) from both Moon Nakshatras:
-1. Varna (spiritual compatibility) — 1 point max
-2. Vashya (mutual attraction) — 2 points max
-3. Tara (destiny compatibility) — 3 points max
-4. Yoni (physical/sexual compatibility) — 4 points max
-5. Graha Maitri (mental compatibility) — 5 points max
-6. Gana (temperament) — 6 points max
-7. Bhakoot (love/wealth) — 7 points max
-8. Nadi (health/genes) — 8 points max
-
-Be as accurate as possible based on the Moon Nakshatra positions. After the score line, write in plain, warm English that anyone can understand. No jargon. Be honest but compassionate. Plain prose only — no markdown formatting (no #, ##, ### headers; no **bold**; no horizontal rules; no bullet lists). Use plain paragraphs separated by blank lines.`;
+Write in plain, warm English that anyone can understand. No jargon. Be honest but compassionate. Plain prose only — no markdown formatting (no #, ##, ### headers; no **bold**; no horizontal rules; no bullet lists). Use plain paragraphs separated by blank lines.`;
 
   // Compatibility was on Sonnet @1800 — taking ~40s and truncating
   // (stop_reason: max_tokens). The 30s app timeout fired before the
@@ -528,7 +536,7 @@ Be as accurate as possible based on the Moon Nakshatra positions. After the scor
   // instead of all 8, which keeps the reading complete in 25-30s on Haiku.
   return callClaude(system, [{
     role: 'user',
-    content: `Analyze the compatibility between these two people. Lead with Vedic (Ashtakoota Milan) and weave in the precomputed Chinese (BaZi) overlay where it adds insight — don't treat them as separate readings.
+    content: `Interpret the compatibility between these two people. The Ashtakoota score and the 8-koota breakdown are provided below — your job is to translate what those numbers mean for this couple, not to repeat them.
 
 ═══ Person 1 ═══
 ${person1.birthData.name}
@@ -537,14 +545,14 @@ ${getChartSummary(person1.birthData, person1.chart)}
 ═══ Person 2 ═══
 ${person2.birthData.name}
 ${getChartSummary(person2.birthData, person2.chart)}
-${chineseBlock ? '\n' + chineseBlock : ''}
-Start with the SCORE: X/36 line. Then call out the 2-3 strongest Kootas and the 1-2 weakest in plain English — what each means for the relationship. Don't list all 8.
+${ashtaBlock ? '\n' + ashtaBlock : ''}${chineseBlock ? '\n' + chineseBlock : ''}
+Open with what naturally draws these two together — the strongest 2-3 areas of the breakdown above and what those mean in everyday relationship life (use plain English, never the Sanskrit names).
 
-Then cover: what naturally draws these two together; their deepest compatibility strengths; areas that will need patience and understanding; how their current life phases (Mahadasha periods) affect the relationship right now; and practical advice for building a strong relationship together.
+Then cover: their deepest compatibility strengths; the 1-2 weakest areas and what they ask the couple to be patient and intentional about; how their current life phases (Mahadasha periods) affect the relationship right now; and a few practical, specific things they can do to build a strong relationship together.
 
-Where the Chinese overlay reinforces or contrasts the Vedic reading, weave it in — for example, mention if the year zodiacs sit in a classic supportive triad or if the day-master elements are in a generating/controlling cycle. Use this to enrich the reading, never to contradict the Vedic core.
+Where the Chinese overlay reinforces or contrasts the Vedic reading, weave it in — for example, if the year zodiacs sit in a classic supportive triad or if the day-master elements are in a generating/controlling cycle. Use it to enrich the reading, never to contradict the Vedic core.
 
-Be honest, specific to their charts, and encouraging. Keep it tight — every sentence should earn its place.`,
+Be honest, specific to their charts, and encouraging. Keep it tight — every sentence should earn its place. Do NOT begin with "SCORE:" or any numeric header — the UI already shows the score above your reading.`,
   }], 2400, undefined, FAST_MODEL, LONG_READING_TIMEOUT_MS);
 }
 
