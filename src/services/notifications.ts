@@ -47,6 +47,9 @@ export async function scheduleDailyInsightNotification(activeDashaLord?: string)
       const scheduled = await Notifications.getAllScheduledNotificationsAsync();
       const toCancel = scheduled.filter(n => n.content.data?.type === 'daily_insight');
       await Promise.all(toCancel.map(n => Notifications.cancelScheduledNotificationAsync(n.identifier)));
+      if (__DEV__) {
+        console.log(`[Notifications] cancelled ${toCancel.length} stale daily_insight; permission:`, (await Notifications.getPermissionsAsync()).status);
+      }
 
       // Pull from the shared dailyAffirmation module so the home-page card
       // and this push notification stay in lock-step.
@@ -55,7 +58,7 @@ export async function scheduleDailyInsightNotification(activeDashaLord?: string)
 
       const body = `${affirmation}\n\n✦ Top 3 to focus on today\n1. ${focuses[0]}\n2. ${focuses[1]}\n3. ${focuses[2]}`;
 
-      await Notifications.scheduleNotificationAsync({
+      const id = await Notifications.scheduleNotificationAsync({
         content: {
           title: '✦ Your Daily Cosmic Insight',
           body,
@@ -69,6 +72,16 @@ export async function scheduleDailyInsightNotification(activeDashaLord?: string)
           repeats: true,
         },
       });
+      if (__DEV__) {
+        const all = await Notifications.getAllScheduledNotificationsAsync();
+        const ours = all.find(n => n.identifier === id);
+        const t: any = ours?.trigger;
+        // expo-notifications round-trips CALENDAR triggers with the time
+        // under dateComponents on iOS and at the top level on Android.
+        const h = t?.dateComponents?.hour ?? t?.hour ?? '?';
+        const m = t?.dateComponents?.minute ?? t?.minute ?? '?';
+        console.log(`[Notifications] scheduled daily_insight id=${id} fires daily at ${h}:${String(m).padStart(2, '0')} local; queue size=${all.length}; lord=${activeDashaLord ?? 'none'}`);
+      }
     } catch (e) {
       if (__DEV__) console.warn('Notification scheduling failed (non-fatal):', e);
     } finally {
