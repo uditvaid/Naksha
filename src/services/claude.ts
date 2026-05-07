@@ -312,6 +312,11 @@ export async function getDailyReading(
   const dayRuler = WEEKDAY_PLANETS[weekday] ?? 'the planetary council';
   const firstName = birthData.name.split(' ')[0] ?? birthData.name;
 
+  // Chandra Bala — adds Moon-transit favourability flavour to the prompt.
+  // Cached service so a second call within the day is free. Swallows any
+  // failure so a flaky API doesn't block the reading.
+  const chandraBalaLine = await getChandraBalaPromptLine(birthData, today);
+
   // The whole system prompt here is stable per (user, chart) — birth data,
   // planets, persona derivation. Cache the entire thing as the prefix so a
   // user opening their daily reading twice in a 5-minute window pays cached
@@ -321,7 +326,7 @@ export async function getDailyReading(
     content: `Offer ${firstName} their personalised daily reading for ${dateStr}.
 
 Today is ${weekday}, which in the Vedic tradition is associated with ${dayRuler}'s energy. Weave this naturally into the reading without making it feel technical.
-
+${chandraBalaLine ? `\nMoon-transit context (use as flavour, never name rasis directly to the user): ${chandraBalaLine}\n` : ''}
 Calibrate your delivery to their ${persona?.archetype ?? 'unique'} nature and ${persona?.learningStyle ?? 'open'} learning style.
 
 Write in plain, warm English that anyone can understand — no astrology jargon, no Sanskrit terms. Speak directly to the person, not about them.
@@ -472,6 +477,7 @@ Write in plain, warm English. Share: which areas of their life are flowing easil
 // ─── Compatibility ────────────────────────────────────────────────────────────
 
 import type { AshtaKootaData } from './prokerala';
+import { getChandraBalaPromptLine } from '@lib/chandraBala';
 
 export async function getCompatibilityReading(
   person1: { birthData: BirthData; chart: ChartData | null },

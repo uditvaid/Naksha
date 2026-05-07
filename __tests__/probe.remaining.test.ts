@@ -58,9 +58,9 @@ liveDescribe('Probe — remaining endpoints (LIVE_API=1)', () => {
       { name: 'mangal-dosha', path: 'mangal-dosha', params: { datetime: natalDatetime, coordinates: coords, ayanamsa: '1', la: 'en' } },
       { name: 'kalsarpa-dosha', path: 'kalsarpa-dosha', params: { datetime: natalDatetime, coordinates: coords, ayanamsa: '1', la: 'en' } },
 
-      // #6 Chandra Bala (Moon strength) — may also be tara-bala
-      { name: 'chandra-bala', path: 'chandra-bala', params: { datetime: natalDatetime, coordinates: coords, ayanamsa: '1', la: 'en' } },
-      { name: 'tara-bala', path: 'tara-bala', params: { datetime: natalDatetime, coordinates: coords, ayanamsa: '1', la: 'en' } },
+      // #6 Chandra Bala (Moon strength) — re-probed with today's datetime
+      { name: 'chandra-bala-today', path: 'chandra-bala', params: { datetime: todayDatetime, coordinates: coords, ayanamsa: '1', la: 'en' } },
+      { name: 'tara-bala-today', path: 'tara-bala', params: { datetime: todayDatetime, coordinates: coords, ayanamsa: '1', la: 'en' } },
 
       // Kalsarpa name variants
       { name: 'kaal-sarpa-dosha', path: 'kaal-sarpa-dosha', params: { datetime: natalDatetime, coordinates: coords, ayanamsa: '1', la: 'en' } },

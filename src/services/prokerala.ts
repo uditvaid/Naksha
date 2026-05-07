@@ -543,6 +543,69 @@ export async function getAuspiciousPeriods(
   return promise;
 }
 
+// ─── Chandra Bala (Moon-strength windows for today) ─────────────────────────
+
+export interface ChandraBalaWindow {
+  start: string;
+  end: string;
+  /** Rasis where the Moon's transit is favorable for the user during this
+   *  window. Classical rule: rasis at certain positions from the user's
+   *  natal Moon are auspicious. We surface the rasi NAMES — let the caller
+   *  cross-check today's Moon rasi to determine favorability. */
+  favorableRasis: string[];
+}
+
+export interface ChandraBalaData {
+  windows: ChandraBalaWindow[];
+  date: string;
+}
+
+let _chandraBalaCache: { key: string; data: ChandraBalaData } | null = null;
+let _chandraBalaInflight: { key: string; promise: Promise<ChandraBalaData> } | null = null;
+
+export async function getChandraBala(
+  birthData: BirthData,
+  date: Date = new Date(),
+): Promise<ChandraBalaData> {
+  const isoDate = date.toISOString().split('T')[0]!;
+  // Chandra Bala windows are computed against the user's natal Moon. The
+  // Prokerala endpoint takes a single datetime + coords; we pass the
+  // user's birth-data datetime — the windows it returns are for the
+  // 24h period starting at that datetime's local sunrise. To surface
+  // *today's* windows we pass today-local-noon at the user's coords.
+  const datetime = formatDateTime(isoDate, '12:00', birthData.timezone);
+  const key = `${isoDate}|${birthData.latitude.toFixed(2)},${birthData.longitude.toFixed(2)}|${birthData.dateOfBirth}`;
+  if (_chandraBalaCache?.key === key) return _chandraBalaCache.data;
+  if (_chandraBalaInflight?.key === key) return _chandraBalaInflight.promise;
+
+  const params = {
+    datetime,
+    coordinates: `${birthData.latitude},${birthData.longitude}`,
+    ayanamsa: '1',
+    la: 'en',
+  };
+
+  const promise = (async () => {
+    try {
+      if (__DEV__) console.log(`[ChandraBala] fetching for ${isoDate}`);
+      const raw = await prokeralaGet('chandra-bala', params);
+      const windows: ChandraBalaWindow[] = (raw?.chandra_bala ?? []).map((w: any) => ({
+        start: w.start,
+        end: w.end,
+        favorableRasis: (w.rasis ?? []).map((r: any) => r.name).filter(Boolean),
+      }));
+      if (__DEV__) console.log(`[ChandraBala] got ${windows.length} window(s), ${windows[0]?.favorableRasis.length ?? 0} favorable rasis`);
+      const data: ChandraBalaData = { windows, date: isoDate };
+      _chandraBalaCache = { key, data };
+      return data;
+    } finally {
+      if (_chandraBalaInflight?.key === key) _chandraBalaInflight = null;
+    }
+  })();
+  _chandraBalaInflight = { key, promise };
+  return promise;
+}
+
 // ─── Mangal Dosha (Mars-related challenge for partnerships) ─────────────────
 
 let _mangalCache: { key: string; data: MangalDoshaInfo } | null = null;
