@@ -11,6 +11,7 @@ import { getCompatibilityReading } from '@services/claude';
 import { geocodePlace, generateChart, PlaceNotFoundError } from '@services/prokerala';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { getChineseCompatibility, ELEMENT_DATA, type ZodiacLevel } from '@utils/bazi';
+import { validatePlace, PLACE_FORMAT_EXAMPLES } from '@utils/placeValidation';
 import type { BirthData, ChartData } from '@store/userStore';
 
 function chineseLevelGlyph(level: ZodiacLevel): string {
@@ -31,33 +32,8 @@ function chineseLevelLabel(level: ZodiacLevel): string {
   }
 }
 
-const PLACE_PART_RE = /^[\p{L}\s\.\-']+$/u;
-type PlaceValidation = { ok: true } | { ok: false; message: string };
-function validatePartnerPlace(raw: string): PlaceValidation {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return {
-      ok: false,
-      message: 'Please enter your partner\'s place of birth (city and country).\n\nExamples: Delhi, India · Columbus, Ohio, USA · London, UK',
-    };
-  }
-  const parts = trimmed.split(',').map(p => p.trim());
-  if (parts.length < 2) {
-    return {
-      ok: false,
-      message: 'Please include both city and country, separated by a comma.\n\nExamples: Delhi, India · Columbus, Ohio, USA',
-    };
-  }
-  for (const p of parts) {
-    if (p.length < 2 || !PLACE_PART_RE.test(p)) {
-      return {
-        ok: false,
-        message: 'Each part should be at least 2 letters and contain only letters, spaces, dots, hyphens, or apostrophes.',
-      };
-    }
-  }
-  return { ok: true };
-}
+// Place validation lives in @utils/placeValidation — same City, State,
+// Country format the onboarding flow enforces.
 
 export default function CompatibilityScreen() {
   const user = useAppStore(s => s.user);
@@ -151,7 +127,7 @@ export default function CompatibilityScreen() {
       return;
     }
 
-    const placeCheck = validatePartnerPlace(partnerPlace);
+    const placeCheck = validatePlace(partnerPlace);
     if (!placeCheck.ok) {
       Alert.alert('Partner\'s Place of Birth', placeCheck.message);
       return;
@@ -169,7 +145,7 @@ export default function CompatibilityScreen() {
       if (e instanceof PlaceNotFoundError) {
         Alert.alert(
           'Place Not Found',
-          'We couldn\'t find that location. Please enter a more specific place with both city and country.',
+          `We couldn't find that location. Please enter a more specific place as City, State, Country.\n\nExamples: ${PLACE_FORMAT_EXAMPLES}`,
         );
       } else {
         Alert.alert('Network Error', 'Could not reach the location service. Please check your connection and try again.');
@@ -380,7 +356,7 @@ export default function CompatibilityScreen() {
               style={styles.input}
               value={partnerPlace}
               onChangeText={setPartnerPlace}
-              placeholder="City, Country"
+              placeholder="City, State, Country"
               placeholderTextColor={Colors.muted}
               autoCapitalize="words"
               autoCorrect={false}

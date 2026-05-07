@@ -13,6 +13,7 @@ import { useAppStore } from '@store/userStore';
 import { generateChart, geocodePlace, PlaceNotFoundError, GeoResult } from '@services/prokerala';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import type { BirthData } from '@store/userStore';
+import { validatePlace, PLACE_FORMAT_EXAMPLES } from '@utils/placeValidation';
 
 const { width } = Dimensions.get('window');
 
@@ -53,38 +54,9 @@ function formatCoords(lat: number, lon: number): string {
   return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'} · ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
 }
 
-// Validate a "City, Country" place string: requires at least city + country/state, each
-// with at least 2 letter-characters, allowing Unicode letters, spaces, dots, hyphens, apostrophes.
-const PLACE_PART_RE = /^[\p{L}\s\.\-']+$/u;
-type PlaceValidation = { ok: true } | { ok: false; message: string };
-function validatePlace(raw: string): PlaceValidation {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return {
-      ok: false,
-      message:
-        'Please enter your place of birth, including both city and country.\n\nExamples: Faridabad, India · Columbus, Ohio, USA · London, UK',
-    };
-  }
-  const parts = trimmed.split(',').map(p => p.trim());
-  if (parts.length < 2) {
-    return {
-      ok: false,
-      message:
-        'Please include both city and country, separated by a comma.\n\nExamples: Faridabad, India · Columbus, Ohio, USA · London, UK',
-    };
-  }
-  for (const p of parts) {
-    if (p.length < 2 || !PLACE_PART_RE.test(p)) {
-      return {
-        ok: false,
-        message:
-          'Each part of the place should be at least 2 letters and contain only letters, spaces, dots, hyphens, or apostrophes.\n\nExamples: Faridabad, India · São Paulo, Brazil · London, UK',
-      };
-    }
-  }
-  return { ok: true };
-}
+// validatePlace lives in @utils/placeValidation — shared with the
+// compatibility partner-input flow so both places enforce the same
+// City, State, Country format.
 
 // ─── Astrological Zodiac Wheel ────────────────────────────────────────────────
 
@@ -308,7 +280,7 @@ export default function OnboardingScreen() {
         if (e instanceof PlaceNotFoundError) {
           Alert.alert(
             'Place Not Found',
-            'We couldn\'t find that location. Please enter a more specific place with both city and country.\n\nExamples: Faridabad, India · Columbus, Ohio, USA · London, UK',
+            `We couldn't find that location. Please enter a more specific place as City, State, Country.\n\nExamples: ${PLACE_FORMAT_EXAMPLES}`,
           );
         } else {
           Alert.alert(
@@ -534,7 +506,7 @@ export default function OnboardingScreen() {
               style={styles.placeInput}
               value={place}
               onChangeText={handlePlaceChange}
-              placeholder="City, Country"
+              placeholder="City, State, Country"
               placeholderTextColor={Colors.muted}
               autoCapitalize="words"
               returnKeyType="done"
@@ -564,7 +536,7 @@ export default function OnboardingScreen() {
             </View>
           )}
 
-          <Text style={styles.inputHint}>Include city and country · e.g. Faridabad, India · London, UK</Text>
+          <Text style={styles.inputHint}>City, State, Country · e.g. Faridabad, Haryana, India</Text>
         </View>
 
         {/* ── Step 5: Generating ── */}
