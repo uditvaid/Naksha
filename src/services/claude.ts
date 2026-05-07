@@ -390,6 +390,11 @@ export async function getNumerologyReading(
 
   const system = `You are a warm, insightful guide helping people understand themselves through numerology. Write in plain, simple English that anyone can understand. No jargon. Describe what each number MEANS in real human terms — not just what it is called. Be specific to this person's numbers, not generic. Speak in flowing prose. End with a simple reflection or affirmation they can carry with them.`;
 
+  // 5 numbers × 1 paragraph each + a closing reflection lands around
+  // 1100 tokens, which means the previous Sonnet @1100 cap was hitting
+  // max_tokens (verified live, stop_reason: max_tokens at exactly 1100).
+  // Switch to Haiku — same prose-style content, faster (~15s vs ~28s),
+  // and a higher cap so the closing reflection actually fits.
   return callClaude(system, [{
     role: 'user',
     content: `Read the numerology of ${name}, born ${formatDate(birthData.dateOfBirth)}.
@@ -402,7 +407,7 @@ Their core numbers and what they represent:
 - Birthday number ${numbers.birthdayNumber} — a natural gift or talent they were born with
 
 Write in plain English. Help them understand the deeper pattern connecting these numbers — what story they tell together about who this person is, what drives them, what they find meaningful, and what they're still growing into. Be specific and encouraging. Close with a simple daily reflection suited to their life path number.`,
-  }], 1100);
+  }], 1400, undefined, FAST_MODEL);
 }
 
 // ─── Chinese Astrology ────────────────────────────────────────────────────────
@@ -440,11 +445,11 @@ export async function getLalKitabReading(
 
   const system = `You are a warm, practical spiritual guide sharing wisdom from an ancient Indian astrological tradition focused on simple, everyday actions that help bring more harmony into a person's life. Write in plain, simple English. No jargon. Describe what things mean in human terms. Focus on what the person can actually DO — simple, achievable practices rooted in the tradition. Be encouraging and warm. Flowing prose only — absolutely no markdown formatting (no #, ##, ### headers; no **bold**; no bullet points; no horizontal rules). Plain paragraphs separated by blank lines.`;
 
-  // Lal Kitab readings are a list of practical remedies + a brief reflection —
-  // no deep reasoning chain needed. Use Haiku (faster, ~5-10s vs Sonnet's
-  // ~30-35s) and a tighter token budget. Sonnet at 1300 tokens was exceeding
-  // REQUEST_TIMEOUT_MS, causing users to see a timeout error instead of the
-  // reading.
+  // Lal Kitab readings are remedies + reflection in flowing prose — no deep
+  // reasoning chain needed. Haiku is fast enough (~17s for 1300 tokens) to
+  // stay well under REQUEST_TIMEOUT_MS while letting the model complete the
+  // 4-section ask without hitting max_tokens. Earlier 900-cap was truncating
+  // mid-sentence (stop_reason: max_tokens, verified live).
   return callClaude(system, [{
     role: 'user',
     content: `Share a personalised reading for ${birthData.name}, born ${formatDate(birthData.dateOfBirth)} at ${birthData.timeOfBirth} in ${birthData.placeOfBirth}.
@@ -453,7 +458,7 @@ Chart: ${chartInfo}
 ${focusPlanet ? `\nFocus especially on: ${focusPlanet}.` : ''}
 
 Write in plain, warm English. Share: which areas of their life are flowing easily right now and which feel blocked or heavy; the most helpful simple practices they can start doing immediately to bring more ease and harmony — make these specific, practical, and easy to do in everyday life; which part of their life will benefit most from these small changes; and a closing reflection on what this particular moment in their life is here to teach them. Avoid all jargon. Speak like a caring, wise friend.`,
-  }], 900, undefined, FAST_MODEL);
+  }], 1400, undefined, FAST_MODEL);
 }
 
 // ─── Compatibility ────────────────────────────────────────────────────────────

@@ -7,6 +7,18 @@ import { getNumerologyReading } from '@services/claude';
 import { calculateLifePathNumber, calculateDestinyNumber, calculateSoulUrge, calculatePersonalityNumber } from '@utils/vedic';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 
+// Defensive markdown strip — Haiku occasionally emits headers / bold even
+// when the system prompt asks for plain prose, and this screen renders raw.
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .trim();
+}
+
 const NUMBER_MEANINGS: Record<number, { title: string; traits: string }> = {
   1: { title: 'The Leader', traits: 'Independent, pioneering, original, ambitious' },
   2: { title: 'The Diplomat', traits: 'Cooperative, sensitive, balanced, supportive' },
@@ -70,7 +82,8 @@ export default function NumerologyScreen() {
     setNumbers(nums);
 
     try {
-      const result = await getNumerologyReading(user.birthData, name, nums);
+      const raw = await getNumerologyReading(user.birthData, name, nums);
+      const result = stripMarkdown(raw);
       setReading(result);
       saveReading({
         type: 'numerology',
