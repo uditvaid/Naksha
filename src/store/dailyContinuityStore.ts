@@ -156,3 +156,7 @@ export const useDailyContinuityStore = create<ContinuityState & ContinuityAction
     }
   )
 );
+
+// Clear past daily readings on user reset.
+import { onAppReset } from './appReset';
+onAppReset(() => useDailyContinuityStore.getState().reset());

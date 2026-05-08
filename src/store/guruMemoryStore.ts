@@ -157,3 +157,9 @@ export const useGuruMemoryStore = create<GuruMemoryState>()(
     }
   )
 );
+
+// Wipe persisted Guru conversational memory when the user signs out / resets
+// their data. Without this, a fresh sign-in (different account or wipe) would
+// inherit the previous user's memory and behave like "the Guru remembers you."
+import { onAppReset } from './appReset';
+onAppReset(() => useGuruMemoryStore.getState().resetMemory());

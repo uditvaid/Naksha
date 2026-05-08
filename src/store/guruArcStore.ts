@@ -136,3 +136,7 @@ export const useGuruArcStore = create<GuruArcState>()(
     }
   )
 );
+
+// Clear arc on user reset so a fresh sign-in starts from phase 1.
+import { onAppReset } from './appReset';
+onAppReset(() => useGuruArcStore.getState().resetArc());

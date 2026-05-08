@@ -23,6 +23,7 @@ import {
 interface GuruRelationshipActions {
   recordSession: () => void;
   clearTransitionFlag: () => void;
+  reset: () => void;
   getEffectivePhase: () => RelationshipPhase;
   getAbsenceDays: () => number;
   buildPhaseBlock: () => string;
@@ -69,6 +70,9 @@ export const useGuruRelationshipStore = create<GuruRelationshipState>()(
       // transition note is shown exactly once.
       clearTransitionFlag: () => set({ justTransitioned: false }),
 
+      // Wipe phase tracking back to phase 1 — used by the app-reset flow.
+      reset: () => set(INITIAL_PHASE_STATE),
+
       getEffectivePhase: () => {
         const s = get();
         return getEffectivePhase(s.phase, computeAbsenceDays(s.lastSessionDate));
@@ -97,3 +101,7 @@ export const useGuruRelationshipStore = create<GuruRelationshipState>()(
     }
   )
 );
+
+// Reset phase tracking on user sign-out / data reset.
+import { onAppReset } from './appReset';
+onAppReset(() => useGuruRelationshipStore.getState().reset());

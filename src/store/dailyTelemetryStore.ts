@@ -138,3 +138,7 @@ export const useDailyTelemetryStore = create<DailyTelemetryState & DailyTelemetr
     }
   )
 );
+
+// Clear telemetry on user reset.
+import { onAppReset } from './appReset';
+onAppReset(() => useDailyTelemetryStore.getState().reset());

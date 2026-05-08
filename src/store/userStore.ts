@@ -4,14 +4,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoCrypto from 'expo-crypto';
 import { FREE_GURU_QUESTIONS_PER_DAY } from '../constants/astrology';
 import { READINGS_RETENTION_DAYS } from './dailyContinuityStore';
+import { fireAppReset } from './appReset';
 
-type ResetListener = () => void;
-const resetListeners: Set<ResetListener> = new Set();
-
-export function onAppReset(listener: ResetListener): () => void {
-  resetListeners.add(listener);
-  return () => resetListeners.delete(listener);
-}
+// Re-export onAppReset from the dependency-free registry so existing
+// callers (`import { onAppReset } from '@store/userStore'`) keep working.
+export { onAppReset } from './appReset';
 
 export interface BirthData {
   name: string;
@@ -254,9 +251,7 @@ export const useAppStore = create<AppState>()(
 
       reset: () => {
         set({ user: defaultUser, guruMessages: [] });
-        resetListeners.forEach(fn => {
-          try { fn(); } catch { /* swallow listener errors */ }
-        });
+        fireAppReset();
       },
     }),
     {

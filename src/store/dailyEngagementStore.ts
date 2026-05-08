@@ -55,3 +55,7 @@ export const useDailyEngagementStore = create<DailyEngagementState>()(
     }
   )
 );
+
+// Clear delivery profile on user reset.
+import { onAppReset } from './appReset';
+onAppReset(() => useDailyEngagementStore.getState().reset());
