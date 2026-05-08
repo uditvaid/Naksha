@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Naksha',
   slug: 'nakshatra',
-  version: '1.2.0',
+  version: '1.1.1',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'dark',
