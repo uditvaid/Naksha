@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Naksha',
   slug: 'nakshatra',
-  version: '1.1.0',
+  version: '1.2.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'dark',
@@ -16,7 +16,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'app.nakshatra.vedic',
-    buildNumber: '27',
+    buildNumber: '28',
     infoPlist: {
       NSCameraUsageDescription:
         'Naksha uses your camera to read your palm lines for Vedic palmistry analysis.',
@@ -65,6 +65,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           NSPrivacyCollectedDataTypeTracking: false,
           NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
+        {
+          // User-entered birthplace gets geocoded to city-level coordinates
+          // and sent to Prokerala on every chart / panchang / muhurat call.
+          // Coarse (not Precise) because we round to 2 decimals and the
+          // source is a user-typed city, not GPS.
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeCoarseLocation',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+        },
       ],
       NSPrivacyAccessedAPITypes: [
         {
@@ -84,7 +94,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#080B14',
     },
     package: 'app.nakshatra.vedic',
-    versionCode: 18,
+    versionCode: 19,
     permissions: [
       'android.permission.CAMERA',
       'android.permission.READ_EXTERNAL_STORAGE',
