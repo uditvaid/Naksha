@@ -11,6 +11,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { onAppReset } from './appReset';
 import {
   RelationshipPhase,
   PhaseState,
@@ -103,5 +104,4 @@ export const useGuruRelationshipStore = create<GuruRelationshipState>()(
 );
 
 // Reset phase tracking on user sign-out / data reset.
-import { onAppReset } from './appReset';
 onAppReset(() => useGuruRelationshipStore.getState().reset());

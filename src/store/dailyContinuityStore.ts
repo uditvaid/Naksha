@@ -10,6 +10,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoCrypto from 'expo-crypto';
+import { onAppReset } from './appReset';
 
 // How long any reading-shaped record persists. Per product decision: a
 // rolling 7-day window. Used by daily records here and by savedReadings
@@ -158,5 +159,4 @@ export const useDailyContinuityStore = create<ContinuityState & ContinuityAction
 );
 
 // Clear past daily readings on user reset.
-import { onAppReset } from './appReset';
 onAppReset(() => useDailyContinuityStore.getState().reset());

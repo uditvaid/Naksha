@@ -10,6 +10,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoCrypto from 'expo-crypto';
+import { onAppReset } from './appReset';
 import {
   UserArc,
   ArcUpdate,
@@ -138,5 +139,4 @@ export const useGuruArcStore = create<GuruArcState>()(
 );
 
 // Clear arc on user reset so a fresh sign-in starts from phase 1.
-import { onAppReset } from './appReset';
 onAppReset(() => useGuruArcStore.getState().resetArc());

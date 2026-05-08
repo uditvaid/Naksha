@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { onAppReset } from './appReset';
 import {
   EngagementProfile,
   DEFAULT_PROFILE,
@@ -57,5 +58,4 @@ export const useDailyEngagementStore = create<DailyEngagementState>()(
 );
 
 // Clear delivery profile on user reset.
-import { onAppReset } from './appReset';
 onAppReset(() => useDailyEngagementStore.getState().reset());

@@ -8,6 +8,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { onAppReset } from './appReset';
 
 export type DailyEventType =
   | 'delivered'
@@ -140,5 +141,4 @@ export const useDailyTelemetryStore = create<DailyTelemetryState & DailyTelemetr
 );
 
 // Clear telemetry on user reset.
-import { onAppReset } from './appReset';
 onAppReset(() => useDailyTelemetryStore.getState().reset());
