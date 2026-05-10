@@ -198,7 +198,10 @@ export default function SavedReadingsScreen() {
 
               <Text style={styles.modalContent}>{selected.content}</Text>
 
-              <AskGuruButton seed={`I'm revisiting my saved reading "${selected.title}". Help me understand `} />
+              <AskGuruButton
+                seed={`I'm revisiting my saved reading "${selected.title}". Help me understand `}
+                onClose={() => setSelected(null)}
+              />
 
               <TouchableOpacity
                 style={styles.deleteFullBtn}

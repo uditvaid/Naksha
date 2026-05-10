@@ -890,7 +890,10 @@ export default function ChartScreen() {
                     {lagna} was rising on the horizon at your birth. Detailed plain-English content for this sign isn't authored yet — the Rising Sign card above already shows the basics.
                   </Text>
                 )}
-                <AskGuruButton seed={`I'm a ${lagna} rising. Help me understand `} />
+                <AskGuruButton
+                  seed={`I'm a ${lagna} rising. Help me understand `}
+                  onClose={() => setLagnaModalOpen(false)}
+                />
               </ScrollView>
             </SafeAreaView>
           );
@@ -960,7 +963,10 @@ export default function ChartScreen() {
                       </View>
                     ))}
 
-                    <AskGuruButton seed={status === 'now' ? `I'm currently in my ${selectedDashaPlanet} life chapter. Help me understand ` : status === 'past' ? `I've already lived through my ${selectedDashaPlanet} life chapter. Help me reflect on ` : `My ${selectedDashaPlanet} life chapter is coming up. Help me prepare for `} />
+                    <AskGuruButton
+                      seed={status === 'now' ? `I'm currently in my ${selectedDashaPlanet} life chapter. Help me understand ` : status === 'past' ? `I've already lived through my ${selectedDashaPlanet} life chapter. Help me reflect on ` : `My ${selectedDashaPlanet} life chapter is coming up. Help me prepare for `}
+                      onClose={() => setSelectedDashaPlanet(null)}
+                    />
                   </>
                 ) : (
                   <Text style={styles.deepModalParagraph}>Detailed content for {selectedDashaPlanet} isn't authored yet.</Text>

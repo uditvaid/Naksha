@@ -97,7 +97,10 @@ export function TarotCardDetailModal({ drawn, positionLabel, onClose }: Props) {
             </>
           )}
 
-          <AskGuruButton seed={`I drew ${drawn.card.name}${drawn.reversed ? ' (reversed)' : ''} in my tarot reading. Help me understand `} />
+          <AskGuruButton
+            seed={`I drew ${drawn.card.name}${drawn.reversed ? ' (reversed)' : ''} in my tarot reading. Help me understand `}
+            onClose={onClose}
+          />
         </ScrollView>
       </SafeAreaView>
     </Modal>

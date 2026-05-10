@@ -229,35 +229,33 @@ export default function GuruScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* Header */}
+        {/* Header — two-row layout so the title doesn't get cramped
+            between Back and Clear at larger font scales. Top row holds
+            navigation actions only; title + subtitle sit on their own
+            line below with full width to breathe. */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            {/* Back button — visible when the user got here from another
-                screen (e.g. tapped AskGuruButton on a reading). Hidden
-                when the Guru is the user's first stop on this nav stack
-                so we don't show a misleading "back" with no destination. */}
-            {router.canGoBack() && (
-              <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-                <Text style={styles.backBtnText}>← Back</Text>
+          <View style={styles.headerActions}>
+            {/* Back is shown only when there's actual nav history. */}
+            {router.canGoBack() ? (
+              <TouchableOpacity onPress={() => router.back()} style={styles.headerActionBtn} hitSlop={8}>
+                <Text style={styles.headerActionText}>← Back</Text>
               </TouchableOpacity>
-            )}
-            <View>
-              <Text style={styles.title}>Guru</Text>
-              <Text style={styles.subtitle}>Your personal Vedic guide</Text>
+            ) : <View />}
+            <View style={styles.headerActionsRight}>
+              {!isPremium && (
+                <View style={styles.questionCount}>
+                  <Text style={styles.questionCountText}>{questionsLeft} left today</Text>
+                </View>
+              )}
+              {messages.length > 0 && (
+                <TouchableOpacity onPress={clearMessages} style={styles.headerActionBtn} hitSlop={8}>
+                  <Text style={styles.headerActionText}>Clear</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
-          <View style={styles.headerRight}>
-            {!isPremium && (
-              <View style={styles.questionCount}>
-                <Text style={styles.questionCountText}>{questionsLeft} left today</Text>
-              </View>
-            )}
-            {messages.length > 0 && (
-              <TouchableOpacity onPress={clearMessages} style={styles.clearBtn}>
-                <Text style={styles.clearBtnText}>Clear</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <Text style={styles.title}>Guru</Text>
+          <Text style={styles.subtitle}>Your personal Vedic guide</Text>
         </View>
 
         <FlatList
@@ -355,12 +353,31 @@ const WelcomeState = memo(function WelcomeState({ onSelect, questions, dashaLord
   );
 });
 
+// Defensive markdown strip — Claude occasionally emits headers / bold
+// even when the system prompt asks for plain prose. The Guru's text
+// is rendered raw in <Text>, so any leaked `#` / `**` shows up as
+// literal characters. Mirrors the same helper used in numerology /
+// lalkitab / chinese reading screens.
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/^---+\s*$/gm, '')
+    .trim();
+}
+
 const MessageBubble = memo(function MessageBubble({ message }: { message: any }) {
   const isUser = message.role === 'user';
+  // Don't strip user messages — what they typed is what they typed.
+  // Only strip markdown from the assistant's responses.
+  const content = isUser ? message.content : stripMarkdown(message.content ?? '');
   return (
     <View style={[styles.bubble, isUser ? styles.userBubble : styles.guroBubble]}>
       {!isUser && <Text style={styles.guruLabel}>✦ GURU · AI-GENERATED</Text>}
-      <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>{message.content}</Text>
+      <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>{content}</Text>
       <Text style={styles.timestamp}>
         {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </Text>
@@ -370,17 +387,15 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: any })
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.midnight },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-  backBtn: { paddingVertical: 6, paddingRight: 4 },
-  backBtnText: { fontSize: 14, color: Colors.gold, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
+  header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder, gap: 4 },
+  headerActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 28 },
+  headerActionsRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  headerActionBtn: { paddingVertical: 4 },
+  headerActionText: { fontSize: 13, color: Colors.gold, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
   title: { fontSize: 20, fontFamily: Fonts.cinzel, color: Colors.gold },
   subtitle: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   questionCount: { backgroundColor: Colors.goldDim, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },
-  questionCountText: { fontSize: 10, fontFamily: Fonts.cinzel, color: Colors.gold },
-  clearBtn: { padding: 4 },
-  clearBtnText: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cinzel },
+  questionCountText: { fontSize: 10, fontFamily: Fonts.cinzel, color: Colors.gold, lineHeight: 12, includeFontPadding: false },
   messagesArea: { flex: 1, paddingHorizontal: Spacing.md },
   messagesContent: { paddingBottom: 16 },
   messagesEmptyContent: { paddingBottom: 16, flexGrow: 1 },

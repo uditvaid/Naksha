@@ -270,7 +270,10 @@ export default function HomeScreen() {
           <ScrollView style={styles.modalSheetBody} showsVerticalScrollIndicator={false}>
             <Text style={styles.modalSheetDate}>{archivedRecord ? formatArchiveDate(archivedRecord.date) : dateStr}</Text>
             <Text style={styles.modalSheetContent}>{archivedRecord?.expanded ?? dailyReading}</Text>
-            <AskGuruButton seed={archivedRecord ? `I'm looking back at my cosmic reading from ${formatArchiveDate(archivedRecord.date)}. Help me understand ` : "I just read today's cosmic reading. Help me understand "} />
+            <AskGuruButton
+              seed={archivedRecord ? `I'm looking back at my cosmic reading from ${formatArchiveDate(archivedRecord.date)}. Help me understand ` : "I just read today's cosmic reading. Help me understand "}
+              onClose={() => { setShowReadingModal(false); setArchivedRecord(null); }}
+            />
             <View style={{ height: 60 }} />
           </ScrollView>
         </SafeAreaView>
@@ -317,7 +320,10 @@ export default function HomeScreen() {
               </View>
             ))}
 
-            <AskGuruButton seed={`I'm sitting with today's affirmation: "${dailyAffirmation}". Help me understand `} />
+            <AskGuruButton
+              seed={`I'm sitting with today's affirmation: "${dailyAffirmation}". Help me understand `}
+              onClose={() => setShowAffirmationModal(false)}
+            />
 
             <Text style={styles.affirmationModalFooter}>
               Affirmations rotate daily through a curated set — the words above are today's. Use them as a thought to keep returning to.

@@ -20,22 +20,29 @@ interface Props {
   /** Seed text dropped into the Guru input. Should end with a trailing
    *  space (or natural punctuation) so the user can type immediately. */
   seed: string;
-  /** Optional override for the button label. Defaults to "Chat with the
-   *  Guru to understand more". */
+  /** Optional override for the button label. */
   label?: string;
+  /** Required when the button is mounted inside a Modal — the parent
+   *  must pass its dismiss callback so we can close the modal *before*
+   *  navigating to the Guru tab. Without this, navigation happens
+   *  underneath the modal and the user sees nothing. */
+  onClose?: () => void;
   /** Optional inline style override. Caller usually doesn't need this. */
   style?: object;
 }
 
-export function AskGuruButton({ seed, label, style }: Props) {
+export function AskGuruButton({ seed, label, onClose, style }: Props) {
   const setPendingGuruContext = useAppStore(s => s.setPendingGuruContext);
   const isPremium = useAppStore(s => s.user.isPremium);
 
   const onPress = () => {
     setPendingGuruContext(seed);
-    // Small delay so the modal it's inside (if any) has time to dismiss
-    // before the navigation animation kicks in. Mirrors the existing
-    // pattern in app/(tabs)/chart.tsx:handleAskGuru.
+    // Close the parent modal first (if there is one), then navigate.
+    // The 250ms delay matches the iOS modal-dismiss animation duration
+    // — without it, the navigation animation collides with the modal
+    // animation and feels jarring. Mirrors the existing pattern in
+    // app/(tabs)/chart.tsx:handleAskGuru.
+    onClose?.();
     setTimeout(() => {
       if (isPremium) {
         router.push('/(tabs)/guru');
@@ -51,10 +58,9 @@ export function AskGuruButton({ seed, label, style }: Props) {
       <View style={styles.row}>
         <Text style={styles.icon}>🔱</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>{label ?? 'Chat with the Guru to understand more'}</Text>
-          <Text style={styles.sub}>Ask follow-up questions about this reading</Text>
+          <Text style={styles.label}>{label ?? 'Ask follow-up questions about this reading'}</Text>
+          <Text style={styles.sub}>Take it deeper with the Guru →</Text>
         </View>
-        <Text style={styles.arrow}>→</Text>
       </View>
     </TouchableOpacity>
   );
