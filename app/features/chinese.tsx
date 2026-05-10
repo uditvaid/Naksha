@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { AskGuruButton } from '@components/AskGuruButton';
-import { elementDeep, lifeStageForAges, luckPillarTheme } from '@lib/baziDetails';
+import { elementDeep, lifeStageForAges, luckPillarTheme, dayMasterRelationDetail } from '@lib/baziDetails';
 import { getChineseReading } from '@services/claude';
 import { CHINESE_ZODIAC } from '@constants/astrology';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
@@ -665,12 +665,30 @@ export default function ChineseScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView contentContainerStyle={{ padding: Spacing.md, paddingBottom: 60 }}>
-                {deep && (
+                {deep && (() => {
+                  const dmRelation = dayMasterRelationDetail(selectedElement, dayPillar.stemElement);
+                  const generatesEd = ELEMENT_DATA[deep.generates];
+                  const generatedByEd = ELEMENT_DATA[deep.generatedBy];
+                  const controlsEd = ELEMENT_DATA[deep.controls];
+                  const controlledByEd = ELEMENT_DATA[deep.controlledBy];
+                  return (
                   <>
                     <Text style={[styles.deepModalQuoteTitle, { color: tone }]}>{deep.essence}</Text>
                     <Text style={styles.deepModalSanskrit}>
-                      {deep.direction} · {deep.season} · {ed?.keywords.join(', ').toLowerCase() ?? ''}
+                      {deep.archetype} · {deep.direction} · {deep.season}
                     </Text>
+
+                    {/* Relationship to the user's Day Master — the most
+                        personally relevant framing. Always shown. */}
+                    {dmRelation && (
+                      <>
+                        <Text style={[styles.deepModalSectionTitle, { color: dmRelation.tone === 'emerald' ? Colors.emerald : dmRelation.tone === 'amber' ? Colors.amber : dmRelation.tone === 'gold' ? Colors.gold : dmRelation.tone === 'star' ? Colors.star : Colors.muted }]}>
+                          RELATIONSHIP TO YOUR DAY MASTER ({dayPillar.stemElement})
+                        </Text>
+                        <Text style={[styles.deepModalParagraph, { fontWeight: '500', color: Colors.gold }]}>{dmRelation.label}</Text>
+                        <Text style={styles.deepModalParagraph}>{dmRelation.meaning}</Text>
+                      </>
+                    )}
 
                     <Text style={[styles.deepModalSectionTitle, { color: tone }]}>WHAT THIS ELEMENT SHAPES</Text>
                     <Text style={styles.deepModalParagraph}>{deep.shapes}</Text>
@@ -684,6 +702,48 @@ export default function ChineseScreen() {
                       {isWeakest ? "YOU'RE LOW ON THIS — WHAT THAT FEELS LIKE" : 'WHEN THIS ELEMENT IS DEFICIENT'}
                     </Text>
                     <Text style={styles.deepModalParagraph}>{deep.whenDeficient}</Text>
+
+                    {/* The element cycle — productive (生 sheng) and
+                        destructive (克 ke). Visualised as plain text so
+                        users can see at a glance what feeds this and
+                        what controls it. */}
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>THE ELEMENT CYCLES</Text>
+                    <Text style={styles.deepModalParagraph}>
+                      Every element produces one and is produced by one (the productive cycle), and controls one and is controlled by one (the destructive cycle). These relationships shape how {selectedElement} behaves with the rest of your chart.
+                    </Text>
+                    <View style={styles.cycleRow}>
+                      <View style={[styles.cycleCard, { borderColor: (generatedByEd?.color ?? Colors.gold) + '60' }]}>
+                        <Text style={styles.cycleLabel}>FED BY</Text>
+                        <Text style={[styles.cycleSymbol, { color: generatedByEd?.color ?? Colors.gold }]}>{generatedByEd?.symbol ?? deep.generatedBy[0]}</Text>
+                        <Text style={[styles.cycleElement, { color: generatedByEd?.color ?? Colors.gold }]}>{deep.generatedBy}</Text>
+                      </View>
+                      <Text style={styles.cycleArrow}>→</Text>
+                      <View style={[styles.cycleCard, styles.cycleCardCenter, { borderColor: tone }]}>
+                        <Text style={styles.cycleLabel}>YOU</Text>
+                        <Text style={[styles.cycleSymbol, { color: tone }]}>{ed?.symbol ?? selectedElement[0]}</Text>
+                        <Text style={[styles.cycleElement, { color: tone }]}>{selectedElement}</Text>
+                      </View>
+                      <Text style={styles.cycleArrow}>→</Text>
+                      <View style={[styles.cycleCard, { borderColor: (generatesEd?.color ?? Colors.gold) + '60' }]}>
+                        <Text style={styles.cycleLabel}>FEEDS</Text>
+                        <Text style={[styles.cycleSymbol, { color: generatesEd?.color ?? Colors.gold }]}>{generatesEd?.symbol ?? deep.generates[0]}</Text>
+                        <Text style={[styles.cycleElement, { color: generatesEd?.color ?? Colors.gold }]}>{deep.generates}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.deepModalParagraph}>
+                      <Text style={{ color: controlledByEd?.color ?? Colors.amber }}>{deep.controlledBy} ({controlledByEd?.symbol ?? ''})</Text> controls {selectedElement} — pressures or weakens it.
+                      {'\n'}
+                      {selectedElement} controls <Text style={{ color: controlsEd?.color ?? Colors.amber }}>{deep.controls} ({controlsEd?.symbol ?? ''})</Text> — keeps it in check.
+                    </Text>
+
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>WHEN THIS ELEMENT PEAKS</Text>
+                    <Text style={styles.deepModalParagraph}>
+                      <Text style={{ fontFamily: Fonts.cinzel, color: tone }}>Time of day:</Text> {deep.timeOfDayPeak}
+                      {'\n'}
+                      <Text style={{ fontFamily: Fonts.cinzel, color: tone }}>Time of year:</Text> {deep.timeOfYearPeak}
+                      {'\n'}
+                      <Text style={{ fontFamily: Fonts.cinzel, color: tone }}>Animals carrying this energy:</Text> {deep.animals.join(', ')}
+                    </Text>
 
                     <Text style={[styles.deepModalSectionTitle, { color: tone }]}>BALANCE PRACTICES</Text>
                     {deep.balancePractices.map((p, i) => (
@@ -707,7 +767,8 @@ export default function ChineseScreen() {
                     <Text style={[styles.deepModalSectionTitle, { color: tone }]}>WHAT TO DO TODAY</Text>
                     <Text style={styles.deepModalLeanInto}>{deep.practiceHint}</Text>
                   </>
-                )}
+                  );
+                })()}
                 <AskGuruButton
                   seed={`${isStrongest ? `My BaZi chart is dominated by ${selectedElement}. ` : isWeakest ? `My BaZi chart is low on ${selectedElement}. ` : `In my BaZi chart, ${selectedElement} matters because `}Help me understand `}
                   onClose={() => setSelectedElement(null)}
@@ -845,6 +906,15 @@ const styles = StyleSheet.create({
   deepModalBulletRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 6 },
   deepModalBulletDot: { fontSize: 16, marginTop: 1, fontFamily: Fonts.cinzel },
   deepModalBulletText: { flex: 1, fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, opacity: 0.9 },
+
+  // Productive cycle visual
+  cycleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 8, gap: 4 },
+  cycleCard: { flex: 1, alignItems: 'center', borderWidth: 1, borderRadius: Radius.md, padding: 10, gap: 4 },
+  cycleCardCenter: { borderWidth: 2 },
+  cycleLabel: { fontSize: 9, letterSpacing: 1, color: Colors.muted, fontFamily: Fonts.cinzel },
+  cycleSymbol: { fontSize: 22, fontFamily: Fonts.cinzel },
+  cycleElement: { fontSize: 11, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
+  cycleArrow: { fontSize: 18, color: Colors.muted, fontFamily: Fonts.cinzel },
 
   traitsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   traitChip: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 10 },

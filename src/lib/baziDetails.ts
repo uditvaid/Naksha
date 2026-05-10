@@ -40,6 +40,22 @@ export interface ElementDeepDetail {
   bodyConnection: string;
   /** A short prompt for what to do when this element shows up strongly today. */
   practiceHint: string;
+  /** Productive cycle — what this element creates / feeds. */
+  generates: string;          // e.g. 'Fire' — Wood feeds Fire
+  /** Productive cycle — what creates / feeds this element. */
+  generatedBy: string;        // e.g. 'Water' — Water feeds Wood
+  /** Destructive cycle — what this element controls / weakens. */
+  controls: string;           // e.g. 'Earth' — Wood breaks Earth
+  /** Destructive cycle — what controls / weakens this element. */
+  controlledBy: string;       // e.g. 'Metal' — Metal cuts Wood
+  /** Hours when this element naturally peaks during the day. */
+  timeOfDayPeak: string;
+  /** Months when this element naturally peaks during the year. */
+  timeOfYearPeak: string;
+  /** Animals (zodiac branches) carrying this element strongly. */
+  animals: string[];
+  /** A single-word archetype for this element. */
+  archetype: string;
 }
 
 export const ELEMENT_DEEP: Record<string, ElementDeepDetail> = {
@@ -66,6 +82,14 @@ export const ELEMENT_DEEP: Record<string, ElementDeepDetail> = {
     season: 'Spring',
     bodyConnection: 'Liver and gallbladder — the organs of decision and detoxification.',
     practiceHint: "When Wood is strong today, start the thing you've been delaying. The first move is the gift.",
+    generates: 'Fire',
+    generatedBy: 'Water',
+    controls: 'Earth',
+    controlledBy: 'Metal',
+    timeOfDayPeak: '3 AM – 7 AM (the unfurling hours)',
+    timeOfYearPeak: 'February – April (spring)',
+    animals: ['Tiger', 'Rabbit'],
+    archetype: 'The Pioneer',
   },
   Fire: {
     essence: "The element of expression, joy, and visibility — the noon-day sun.",
@@ -90,6 +114,14 @@ export const ELEMENT_DEEP: Record<string, ElementDeepDetail> = {
     season: 'Summer',
     bodyConnection: 'Heart, small intestine, and circulation. The mind and emotional life are also Fire-governed.',
     practiceHint: "When Fire is strong today, let yourself be visible. Send the message, post the thing, light up the room.",
+    generates: 'Earth',
+    generatedBy: 'Wood',
+    controls: 'Metal',
+    controlledBy: 'Water',
+    timeOfDayPeak: '9 AM – 1 PM (the radiant hours)',
+    timeOfYearPeak: 'May – July (early to peak summer)',
+    animals: ['Snake', 'Horse'],
+    archetype: 'The Performer',
   },
   Earth: {
     essence: "The element of grounding, nourishment, and steady reliability — late summer's harvest.",
@@ -114,6 +146,14 @@ export const ELEMENT_DEEP: Record<string, ElementDeepDetail> = {
     season: 'Late summer / between seasons',
     bodyConnection: 'Spleen, stomach, and digestion. Worry lives here; so does the capacity to nourish.',
     practiceHint: "When Earth is strong today, slow down. Make a real meal. Tend something. The pause is the practice.",
+    generates: 'Metal',
+    generatedBy: 'Fire',
+    controls: 'Water',
+    controlledBy: 'Wood',
+    timeOfDayPeak: '7 AM – 9 AM and 1 PM – 3 PM (transition hours)',
+    timeOfYearPeak: 'The eighteen days at each season change (土用)',
+    animals: ['Ox', 'Dragon', 'Sheep / Goat', 'Dog'],
+    archetype: 'The Caretaker',
   },
   Metal: {
     essence: "The element of refinement, discernment, and letting go — autumn's clarity.",
@@ -138,6 +178,14 @@ export const ELEMENT_DEEP: Record<string, ElementDeepDetail> = {
     season: 'Autumn',
     bodyConnection: 'Lungs and large intestine — the organs of receiving (breath) and releasing (waste). Skin too.',
     practiceHint: "When Metal is strong today, let something go. Empty a drawer, end a chapter, exhale what you've been holding.",
+    generates: 'Water',
+    generatedBy: 'Earth',
+    controls: 'Wood',
+    controlledBy: 'Fire',
+    timeOfDayPeak: '3 PM – 7 PM (the harvest hours)',
+    timeOfYearPeak: 'August – October (autumn)',
+    animals: ['Monkey', 'Rooster'],
+    archetype: 'The Refiner',
   },
   Water: {
     essence: "The element of depth, reflection, and quiet wisdom — winter's stillness.",
@@ -162,11 +210,88 @@ export const ELEMENT_DEEP: Record<string, ElementDeepDetail> = {
     season: 'Winter',
     bodyConnection: 'Kidneys, bladder, and the deep reserve of vitality the Chinese call jing. Bones and ears too.',
     practiceHint: "When Water is strong today, go inward. Skip the meeting if you can. Sleep, dream, listen — the answer is below the surface.",
+    generates: 'Wood',
+    generatedBy: 'Metal',
+    controls: 'Fire',
+    controlledBy: 'Earth',
+    timeOfDayPeak: '9 PM – 1 AM (the deep hours)',
+    timeOfYearPeak: 'November – January (winter)',
+    animals: ['Pig', 'Rat'],
+    archetype: 'The Sage',
   },
 };
 
 export function elementDeep(name: string): ElementDeepDetail | null {
   return ELEMENT_DEEP[name] ?? null;
+}
+
+// ─── Day-Master relationship analyser ────────────────────────────────────
+//
+// Every element has a specific RELATIONSHIP with the Day Master element.
+// In BaZi, this is the "ten gods" framework — six roles a non-Day-Master
+// element can play, simplified here to four useful categories users
+// can recognise without learning a vocabulary first.
+
+export type DayMasterRelation = 'self' | 'supports' | 'drains' | 'controls' | 'controlledBy';
+
+export interface DayMasterRelationDetail {
+  /** Plain-English heading for the relationship. */
+  label: string;
+  /** What this means for the user. */
+  meaning: string;
+  /** Color tone for the section header. */
+  tone: 'gold' | 'emerald' | 'amber' | 'star' | 'muted';
+}
+
+export function relationToDayMaster(element: string, dayMasterElement: string): DayMasterRelation {
+  if (element === dayMasterElement) return 'self';
+  const dm = ELEMENT_DEEP[dayMasterElement];
+  if (!dm) return 'self';
+  if (dm.generatedBy === element) return 'supports';   // element feeds Day Master
+  if (dm.generates === element) return 'drains';       // Day Master feeds this element (output)
+  if (dm.controlledBy === element) return 'controls';  // element controls Day Master (pressure)
+  if (dm.controls === element) return 'controlledBy';  // Day Master controls this element (wealth/output)
+  return 'self';
+}
+
+export function dayMasterRelationDetail(
+  element: string,
+  dayMasterElement: string,
+): DayMasterRelationDetail | null {
+  if (!ELEMENT_DEEP[element] || !ELEMENT_DEEP[dayMasterElement]) return null;
+  const rel = relationToDayMaster(element, dayMasterElement);
+  switch (rel) {
+    case 'self':
+      return {
+        label: 'Same as your Day Master',
+        meaning: `${element} is your Day Master element — this is the central energy of your chart. More of it generally strengthens your sense of self; too much can make you stubborn or insulated.`,
+        tone: 'gold',
+      };
+    case 'supports':
+      return {
+        label: 'Supports your Day Master',
+        meaning: `${element} feeds and strengthens ${dayMasterElement} (your Day Master). When this element is present in your chart, you have built-in support — confidence, vitality, and the resources to express your nature without effort.`,
+        tone: 'emerald',
+      };
+    case 'drains':
+      return {
+        label: 'Channels your Day Master\'s energy',
+        meaning: `Your Day Master ${dayMasterElement} produces ${element}. This is your "output" element — what you create, give, or express. Strong ${element} means you have natural creative or productive force; weak ${element} can feel like ideas stuck inside.`,
+        tone: 'star',
+      };
+    case 'controls':
+      return {
+        label: 'Pressures your Day Master',
+        meaning: `${element} controls ${dayMasterElement}. In the BaZi tradition this is the "pressure" element — challenges, authority figures, demands placed on you. Too much makes you feel ruled by external forces; balanced amounts build discipline and resilience.`,
+        tone: 'amber',
+      };
+    case 'controlledBy':
+      return {
+        label: 'Your "wealth" element',
+        meaning: `Your Day Master ${dayMasterElement} controls ${element}. This is classically your "wealth" element — what you can master, manage, accumulate. Strong presence often correlates with material success and capability; deficient ${element} suggests money / resources may need conscious cultivation.`,
+        tone: 'muted',
+      };
+  }
 }
 
 // ─── Luck Pillar Life-Stage Framing ───────────────────────────────────────
