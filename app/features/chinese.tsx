@@ -1,9 +1,10 @@
 import { useState, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { AskGuruButton } from '@components/AskGuruButton';
+import { elementDeep, lifeStageForAges, luckPillarTheme } from '@lib/baziDetails';
 import { getChineseReading } from '@services/claude';
 import { CHINESE_ZODIAC } from '@constants/astrology';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
@@ -113,6 +114,8 @@ export default function ChineseScreen() {
   // 'day' since the Day Pillar is the most important — gives the user a
   // useful starting view without requiring a tap.
   const [expandedPillar, setExpandedPillar] = useState<'year'|'month'|'day'|'hour'>('day');
+  const [selectedElement, setSelectedElement] = useState<string | null>(null);
+  const [selectedLuckIdx, setSelectedLuckIdx] = useState<number | null>(null);
   // Independent toggles for the deeper Stem / Branch detail blocks within
   // the active pillar's detail card. Stem auto-expands when the Day pillar
   // is selected — that block contains the Day Master profile, the most
@@ -450,12 +453,19 @@ export default function ChineseScreen() {
               Your BaZi chart contains 8 characters, each carrying one of the Five Elements (五行). The balance — or imbalance — between them shapes your strengths, weaknesses, and what you naturally seek or lack.
             </Text>
 
-            {/* Visual balance bars */}
+            <Text style={styles.tapHintLine}>Tap any element for plain-English context →</Text>
+
+            {/* Visual balance bars — each row tappable for the deep modal */}
             {elements.map(({ name, count }) => {
               const ed = ELEMENT_DATA[name];
               const pct = count / maxBalance;
               return (
-                <View key={name} style={styles.elementRow}>
+                <TouchableOpacity
+                  key={name}
+                  style={styles.elementRow}
+                  onPress={() => setSelectedElement(name)}
+                  activeOpacity={0.75}
+                >
                   <Text style={[styles.elementSymbol, { color: ed?.color ?? Colors.gold }]}>{ed?.symbol ?? name[0]}</Text>
                   <View style={{ flex: 1 }}>
                     <View style={styles.elementBarBg}>
@@ -464,7 +474,7 @@ export default function ChineseScreen() {
                     <Text style={styles.elementName}>{name} — {ed?.keywords.join(', ') ?? ''}</Text>
                   </View>
                   <Text style={[styles.elementCount, { color: ed?.color ?? Colors.gold }]}>{count}</Text>
-                </View>
+                </TouchableOpacity>
               );
             })}
 
@@ -493,12 +503,19 @@ export default function ChineseScreen() {
               Luck Pillars (大运) are 10-year chapters of your life — the closest Chinese astrology equivalent to Vedic Mahadashas. Each brings a specific elemental energy that activates different parts of your destiny chart. The direction (forward/backward) varies by birth year polarity and gender.
             </Text>
 
+            <Text style={styles.tapHintLine}>Tap any chapter for plain-English context →</Text>
+
             {luckPillars.map((lp, i) => {
               const stemEl = ELEMENT_DATA[lp.stemElement];
               const branchEl = ELEMENT_DATA[lp.branchElement];
               const isCurrent = (currentYear >= lp.startYear && currentYear < lp.startYear + 10);
               return (
-                <View key={i} style={[styles.luckPillarCard, isCurrent && styles.luckPillarActive]}>
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.luckPillarCard, isCurrent && styles.luckPillarActive]}
+                  onPress={() => setSelectedLuckIdx(i)}
+                  activeOpacity={0.75}
+                >
                   <View style={styles.luckLeft}>
                     <Text style={[styles.luckChar, { color: stemEl?.color ?? Colors.gold }]}>{lp.stemChar}</Text>
                     <Text style={[styles.luckChar, { color: branchEl?.color ?? Colors.star, fontSize: 18 }]}>{lp.branchChar}</Text>
@@ -515,7 +532,8 @@ export default function ChineseScreen() {
                       <Text style={[styles.luckElem, { color: branchEl?.color ?? Colors.star }]}>{lp.branchElement}</Text>
                     </View>
                   </View>
-                </View>
+                  <Text style={styles.luckTapArrow}>→</Text>
+                </TouchableOpacity>
               );
             })}
             <Text style={styles.approxNote}>Start ages are approximate. Precise calculation requires exact solar term distances from birth date.</Text>
@@ -617,6 +635,171 @@ export default function ChineseScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Five Element drill-down modal — opens when an element row is
+          tapped. Plain-English: what the element shapes, what it feels
+          like when dominant vs deficient, concrete balance practices,
+          career themes, body connection. */}
+      <Modal
+        visible={selectedElement !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedElement(null)}
+      >
+        {selectedElement && (() => {
+          const ed = ELEMENT_DATA[selectedElement];
+          const deep = elementDeep(selectedElement);
+          const tone = ed?.color ?? Colors.gold;
+          const isStrongest = balance.strongest === selectedElement;
+          const isWeakest = balance.weakest === selectedElement;
+          return (
+            <SafeAreaView style={styles.deepModalContainer}>
+              <View style={styles.deepModalHeader}>
+                <Text style={[styles.deepModalLabel, { color: tone }]}>
+                  {ed?.symbol ?? ''}  {selectedElement.toUpperCase()}
+                  {isStrongest && '  ·  YOUR DOMINANT'}
+                  {isWeakest && '  ·  YOUR DEFICIENT'}
+                </Text>
+                <TouchableOpacity onPress={() => setSelectedElement(null)} style={styles.deepModalClose}>
+                  <Text style={styles.deepModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: Spacing.md, paddingBottom: 60 }}>
+                {deep && (
+                  <>
+                    <Text style={[styles.deepModalQuoteTitle, { color: tone }]}>{deep.essence}</Text>
+                    <Text style={styles.deepModalSanskrit}>
+                      {deep.direction} · {deep.season} · {ed?.keywords.join(', ').toLowerCase() ?? ''}
+                    </Text>
+
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>WHAT THIS ELEMENT SHAPES</Text>
+                    <Text style={styles.deepModalParagraph}>{deep.shapes}</Text>
+
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>
+                      {isStrongest ? 'YOU HAVE A LOT OF THIS — WHAT THAT FEELS LIKE' : 'WHEN THIS ELEMENT IS DOMINANT'}
+                    </Text>
+                    <Text style={styles.deepModalParagraph}>{deep.whenDominant}</Text>
+
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>
+                      {isWeakest ? "YOU'RE LOW ON THIS — WHAT THAT FEELS LIKE" : 'WHEN THIS ELEMENT IS DEFICIENT'}
+                    </Text>
+                    <Text style={styles.deepModalParagraph}>{deep.whenDeficient}</Text>
+
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>BALANCE PRACTICES</Text>
+                    {deep.balancePractices.map((p, i) => (
+                      <View key={`bp-${i}`} style={styles.deepModalBulletRow}>
+                        <Text style={[styles.deepModalBulletDot, { color: tone }]}>·</Text>
+                        <Text style={styles.deepModalBulletText}>{p}</Text>
+                      </View>
+                    ))}
+
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>CAREER THEMES</Text>
+                    {deep.careerThemes.map((c, i) => (
+                      <View key={`ct-${i}`} style={styles.deepModalBulletRow}>
+                        <Text style={[styles.deepModalBulletDot, { color: tone }]}>·</Text>
+                        <Text style={styles.deepModalBulletText}>{c}</Text>
+                      </View>
+                    ))}
+
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>BODY CONNECTION</Text>
+                    <Text style={styles.deepModalParagraph}>{deep.bodyConnection}</Text>
+
+                    <Text style={[styles.deepModalSectionTitle, { color: tone }]}>WHAT TO DO TODAY</Text>
+                    <Text style={styles.deepModalLeanInto}>{deep.practiceHint}</Text>
+                  </>
+                )}
+                <AskGuruButton
+                  seed={`${isStrongest ? `My BaZi chart is dominated by ${selectedElement}. ` : isWeakest ? `My BaZi chart is low on ${selectedElement}. ` : `In my BaZi chart, ${selectedElement} matters because `}Help me understand `}
+                  onClose={() => setSelectedElement(null)}
+                />
+              </ScrollView>
+            </SafeAreaView>
+          );
+        })()}
+      </Modal>
+
+      {/* Luck Pillar drill-down modal — tap a 10-year chapter for the
+          deeper context: what the elements typically bring, what to
+          lean into, what to watch out for, and the life-stage frame
+          for the age range it covers. */}
+      <Modal
+        visible={selectedLuckIdx !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedLuckIdx(null)}
+      >
+        {selectedLuckIdx !== null && (() => {
+          const lp = luckPillars[selectedLuckIdx];
+          if (!lp) return null;
+          const stemEl = ELEMENT_DATA[lp.stemElement];
+          const branchEl = ELEMENT_DATA[lp.branchElement];
+          const stage = lifeStageForAges(lp.startAge, lp.endAge);
+          const theme = luckPillarTheme(lp.stemElement, lp.branchElement);
+          const isCurrent = currentYear >= lp.startYear && currentYear < lp.startYear + 10;
+          const isPast = currentYear >= lp.startYear + 10;
+          const status = isCurrent ? 'CURRENT CHAPTER' : isPast ? 'COMPLETED' : 'UPCOMING';
+          const tone = stemEl?.color ?? Colors.gold;
+          return (
+            <SafeAreaView style={styles.deepModalContainer}>
+              <View style={styles.deepModalHeader}>
+                <Text style={[styles.deepModalLabel, { color: tone }]}>
+                  {lp.stemChar}{lp.branchChar}  ·  {status}
+                </Text>
+                <TouchableOpacity onPress={() => setSelectedLuckIdx(null)} style={styles.deepModalClose}>
+                  <Text style={styles.deepModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: Spacing.md, paddingBottom: 60 }}>
+                <Text style={[styles.deepModalQuoteTitle, { color: tone }]}>
+                  {lp.stem} {lp.branch}
+                </Text>
+                <Text style={styles.deepModalSanskrit}>
+                  Ages {lp.startAge}–{lp.endAge}  ·  {lp.startYear}–{lp.startYear + 9}
+                </Text>
+                <Text style={styles.deepModalDates}>
+                  {lp.stemElement} (above) · {lp.branchElement} (below)
+                </Text>
+
+                <Text style={[styles.deepModalSectionTitle, { color: tone }]}>LIFE STAGE</Text>
+                <Text style={[styles.deepModalParagraph, { fontWeight: '500' }]}>{stage.label}</Text>
+                <Text style={styles.deepModalParagraph}>{stage.theme}</Text>
+
+                <Text style={[styles.deepModalSectionTitle, { color: tone }]}>THE FLAVOUR OF THIS CHAPTER</Text>
+                <Text style={styles.deepModalParagraph}>{theme.flavour}</Text>
+
+                {theme.rewards.length > 0 && (
+                  <>
+                    <Text style={[styles.deepModalSectionTitle, { color: Colors.emerald }]}>WHAT THIS CHAPTER REWARDS</Text>
+                    {theme.rewards.map((r, i) => (
+                      <View key={`r-${i}`} style={styles.deepModalBulletRow}>
+                        <Text style={[styles.deepModalBulletDot, { color: Colors.emerald }]}>✓</Text>
+                        <Text style={styles.deepModalBulletText}>{r}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {theme.cautions.length > 0 && (
+                  <>
+                    <Text style={[styles.deepModalSectionTitle, { color: Colors.amber }]}>WHAT TO WATCH OUT FOR</Text>
+                    {theme.cautions.map((c, i) => (
+                      <View key={`c-${i}`} style={styles.deepModalBulletRow}>
+                        <Text style={[styles.deepModalBulletDot, { color: Colors.amber }]}>!</Text>
+                        <Text style={styles.deepModalBulletText}>{c}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                <AskGuruButton
+                  seed={isCurrent ? `I'm currently in my ${lp.stem} ${lp.branch} luck pillar (ages ${lp.startAge}–${lp.endAge}). Help me understand ` : isPast ? `I lived through my ${lp.stem} ${lp.branch} luck pillar from ages ${lp.startAge}–${lp.endAge}. Help me reflect on ` : `My ${lp.stem} ${lp.branch} luck pillar is coming up at age ${lp.startAge}. Help me prepare for `}
+                  onClose={() => setSelectedLuckIdx(null)}
+                />
+              </ScrollView>
+            </SafeAreaView>
+          );
+        })()}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -644,6 +827,24 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
   sectionTitle: { fontSize: 10, letterSpacing: 2, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 10 },
   sectionSubtitle: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 20, marginBottom: 16 },
+  tapHintLine: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cormorantItalic, opacity: 0.85, marginBottom: 12, letterSpacing: 0.3 },
+  luckTapArrow: { fontSize: 16, color: Colors.gold, fontFamily: Fonts.cinzel, marginLeft: 8 },
+
+  // Deep modal — shared by Five Elements + Luck Pillars drill-downs
+  deepModalContainer: { flex: 1, backgroundColor: Colors.midnight },
+  deepModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  deepModalLabel: { fontSize: 13, fontFamily: Fonts.cinzel, letterSpacing: 1.5, flex: 1 },
+  deepModalClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  deepModalCloseText: { fontSize: 18, color: Colors.muted },
+  deepModalQuoteTitle: { fontSize: 22, fontFamily: Fonts.cinzel, letterSpacing: 0.3, marginTop: 4 },
+  deepModalSanskrit: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, letterSpacing: 0.5, marginTop: 4 },
+  deepModalDates: { fontSize: 12, color: Colors.amber, fontFamily: Fonts.cinzel, letterSpacing: 0.5, marginTop: 6 },
+  deepModalSectionTitle: { fontSize: 11, letterSpacing: 2, fontFamily: Fonts.cinzel, marginTop: Spacing.lg, marginBottom: 10 },
+  deepModalParagraph: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 24, marginBottom: 6 },
+  deepModalLeanInto: { fontSize: 15, color: Colors.star, fontFamily: Fonts.cormorantItalic, lineHeight: 24, marginBottom: 6 },
+  deepModalBulletRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 6 },
+  deepModalBulletDot: { fontSize: 16, marginTop: 1, fontFamily: Fonts.cinzel },
+  deepModalBulletText: { flex: 1, fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, opacity: 0.9 },
 
   traitsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   traitChip: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 10 },
