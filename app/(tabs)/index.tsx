@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Modal, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useAppStore, onAppReset } from '@store/userStore';
@@ -194,6 +194,32 @@ export default function HomeScreen() {
   // (greeting, date, lunar phase, affirmation, active dasha) re-evaluates so
   // the screen stays correct after a midnight or noon boundary.
   useFocusEffect(useCallback(() => { setNowTick(Date.now()); }, []));
+
+  // Tab focus alone misses the case where the user keeps the home tab in
+  // foreground and the app goes idle / backgrounds across midnight. Without
+  // this listener, today's affirmation + today's time windows stay frozen
+  // on yesterday's date until the user navigates away and back. Listening
+  // to AppState 'active' transitions covers app-resume from background
+  // and the midnight-while-active case (iOS reports a state change when
+  // the screen wakes from sleep mid-foreground).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setNowTick(Date.now());
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Defensive: if the app stays foregrounded across midnight without an
+  // AppState change (rare on real devices, common on simulator with
+  // "Slow Animations" off), schedule a one-shot refresh at next midnight.
+  useEffect(() => {
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 5, 0); // 5s past midnight to be safe
+    const ms = nextMidnight.getTime() - now.getTime();
+    const t = setTimeout(() => setNowTick(Date.now()), ms);
+    return () => clearTimeout(t);
+  }, [nowTick]);
 
   return (
     <SafeAreaView style={styles.container}>
