@@ -177,6 +177,25 @@ export default function SavedReadingsScreen() {
                   <Text style={styles.questionText}>{selected.question}</Text>
                 </View>
               )}
+
+              {/* If this saved reading was a tarot spread, render the cards
+                  visually above the prose so the user can re-see what they
+                  drew, not just re-read what was written about it. */}
+              {selected.type === 'tarot' && selected.cards && selected.cards.length > 0 && (
+                <View style={styles.tarotCardsRow}>
+                  {selected.cards.map((c, i) => (
+                    <View key={`tc-${i}`} style={styles.tarotCardSlot}>
+                      <Text style={styles.tarotPositionLabel} numberOfLines={2}>{c.position.toUpperCase()}</Text>
+                      <View style={[styles.tarotCardFace, c.reversed && styles.tarotCardFaceReversed]}>
+                        <Text style={styles.tarotCardSymbol}>{c.symbol}</Text>
+                        <Text style={styles.tarotCardName} numberOfLines={2}>{c.name}</Text>
+                        {c.reversed && <Text style={styles.tarotReversedBadge}>↓ reversed</Text>}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               <Text style={styles.modalContent}>{selected.content}</Text>
 
               <AskGuruButton seed={`I'm revisiting my saved reading "${selected.title}". Help me understand `} />
@@ -242,6 +261,16 @@ const styles = StyleSheet.create({
   questionLabel: { fontSize: 9, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginBottom: 6 },
   questionText: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, fontStyle: 'italic' },
   modalContent: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 26, marginBottom: Spacing.xl },
+
+  // Tarot card replay — small versions of the cards shown above prose
+  tarotCardsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.md, justifyContent: 'center' },
+  tarotCardSlot: { width: 90, alignItems: 'center', gap: 4 },
+  tarotPositionLabel: { fontSize: 9, letterSpacing: 1, color: Colors.muted, fontFamily: Fonts.cinzel, textAlign: 'center', minHeight: 24 },
+  tarotCardFace: { width: 80, height: 110, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gold + '60', borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', padding: 6, gap: 4 },
+  tarotCardFaceReversed: { transform: [{ rotate: '180deg' }] },
+  tarotCardSymbol: { fontSize: 22, color: Colors.gold, fontFamily: Fonts.cinzel },
+  tarotCardName: { fontSize: 9, color: Colors.star, fontFamily: Fonts.cinzel, textAlign: 'center', letterSpacing: 0.3 },
+  tarotReversedBadge: { fontSize: 8, color: Colors.amber, fontFamily: Fonts.cinzel, letterSpacing: 0.5 },
   deleteFullBtn: { alignItems: 'center', paddingVertical: 12 },
   deleteFullBtnText: { fontSize: 13, color: Colors.ruby, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },
 });

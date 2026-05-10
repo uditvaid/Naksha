@@ -74,6 +74,14 @@ export interface SavedReading {
   content: string;       // Full reading content
   question?: string;     // For guru readings
   createdAt: string;
+  /** For tarot readings: the cards drawn, with positions + orientations.
+   *  Lets the saved-readings detail re-render the spread visually rather
+   *  than just showing the prose. Optional for backwards-compat with
+   *  pre-existing saved readings. */
+  cards?: { name: string; symbol: string; reversed: boolean; position: string }[];
+  /** For tarot readings: which spread was used (single / three /
+   *  decision / relationship / celticCross). */
+  spreadType?: string;
 }
 
 export interface UserProfile {

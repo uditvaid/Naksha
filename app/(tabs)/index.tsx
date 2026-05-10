@@ -14,6 +14,7 @@ import { usePanchang, panchangSummaryLine } from '@lib/panchang';
 import { buildAffirmationContext } from '@lib/affirmationContext';
 import { AuspiciousPeriodsCard } from '@components/AuspiciousPeriodsCard';
 import { AskGuruButton } from '@components/AskGuruButton';
+import { DailyTarotCard } from '@components/DailyTarotCard';
 import { findActiveDasha, findActiveAntardasha } from '@utils/vedic';
 
 function stripMarkdown(text: string): string {
@@ -403,6 +404,16 @@ export default function HomeScreen() {
             Renders nothing while loading; tap to see plain-English
             explanation of each window's purpose. */}
         <AuspiciousPeriodsCard birthData={birthData} nowTick={nowTick} />
+
+        {/* Daily tarot card — deterministic per-user-per-day. Tap to flip,
+            tap again to see the rich detail modal. Updates the streak
+            counter to gently reward daily ritual. */}
+        {birthData && (
+          <DailyTarotCard
+            userKey={`${birthData.dateOfBirth}|${birthData.timeOfBirth}|${birthData.latitude.toFixed(2)},${birthData.longitude.toFixed(2)}`}
+            nowTick={nowTick}
+          />
+        )}
 
         {/* Daily Reading — preview card, tap to expand */}
         <View style={styles.section}>

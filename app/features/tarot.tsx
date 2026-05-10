@@ -57,9 +57,19 @@ export default function TarotScreen() {
       setReading(text);
       saveReading({
         type: 'tarot',
-        title: question.trim() ? `Tarot — ${question.trim().slice(0, 40)}${question.trim().length > 40 ? '…' : ''}` : `Tarot — ${spread === 'single' ? 'Single Card' : 'Three-Card Spread'}`,
+        title: question.trim() ? `Tarot — ${question.trim().slice(0, 40)}${question.trim().length > 40 ? '…' : ''}` : `Tarot — ${SPREADS.find(s => s.id === spread)?.label ?? spread}`,
         preview: text.slice(0, 120) + '…',
         content: text,
+        // Persist the cards too so saved-readings detail can show the
+        // spread visually instead of just the prose. Strip down to the
+        // serialisable fields the deck needs to re-render.
+        cards: cards.map(c => ({
+          name: c.card.name,
+          symbol: c.card.symbol,
+          reversed: c.reversed,
+          position: c.position,
+        })),
+        spreadType: spread,
       });
     } catch (e: any) {
       setReading(`Unable to get tarot reading: ${e?.message ?? 'Please try again shortly.'}`);

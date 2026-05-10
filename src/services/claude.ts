@@ -610,25 +610,39 @@ export async function getTarotReading(
 - Active Mahadasha: ${dasha?.planet ?? '—'}`;
   })();
 
-  const spreadLabel = spread === 'single' ? 'Single Card draw' : 'Three-Card spread (Past / Present / Future)';
+  const SPREAD_LABELS: Record<string, string> = {
+    single: 'Single Card draw',
+    three: 'Past · Present · Future spread',
+    decision: 'Decision spread (If A / If B / Underneath Both) — focus on which path the cards favour and the deeper truth running under the choice',
+    relationship: 'Relationship spread (You / Them / The Bond / What Helps / What Strains) — read each position\'s impact on the connection',
+    celticCross: 'Celtic Cross — the classic 10-card deep reading; weave the cards into the layered story their positions suggest',
+  };
+  const spreadLabel = SPREAD_LABELS[spread] ?? `${spread} spread`;
 
   const system = `You are a thoughtful tarot reader rooted in the Rider-Waite-Smith tradition. You read the cards as they fall — honest, specific, neither doom-laden nor saccharine. You trust the querent to handle truth delivered with care.
 
-When the querent provides chart context, use it lightly: the cards lead, the chart adds texture (e.g. how this lands during a Saturn period vs a Jupiter period). Never let astrology override the actual cards.
+CRITICAL: each card's meaning is shaped by its POSITION in the spread, not just the card itself. A "Tower" in the Past slot is a finished collapse to integrate; the same Tower in the Outcome slot is a coming reckoning. Read every card through its position.
 
-Write in plain, warm English. No jargon. No bullet lists in the body — speak in paragraphs that flow.`;
+When the querent provides chart context, use it lightly but specifically: weave in how this reading lands DURING THIS PERIOD of their life (their active Mahadasha colours how the cards arrive). Don't just mention the chart — connect it. Never let astrology override the actual cards.
+
+Write in plain, warm English. No jargon — say "Mars period" not "Mangala mahadasha" if you reference it. No bullet lists in the body — speak in paragraphs that flow.`;
 
   const user = `${spreadLabel}.
 
 Question: ${question.trim() || '(No specific question — open reading.)'}
 
-Cards drawn:
+Cards drawn (read each through its position):
 ${cardsBlock}
 ${chartContext}
 
-Read the spread. Begin with one short paragraph of the overall message, then walk through each position naming the card and its meaning in this specific question. End with one grounded, actionable reflection — something the querent can actually do or notice in the next few days. Honour reversed cards as nuance (challenge, internalisation, delay) rather than disasters.
+Read the spread. Begin with one short paragraph of the overall message, then walk through each position naming the card and its meaning in *this specific position* in *this specific question*. End with one grounded, actionable reflection — something the querent can actually do or notice in the next few days. Honour reversed cards as nuance (challenge, internalisation, delay) rather than disasters.
 
-Keep it tight: ~250-400 words total.`;
+Where the active Mahadasha resonates with a card's themes, name that resonance — but in plain English (e.g. "you're in a Saturn period, which makes The Hermit's invitation to slow down feel especially apt now"). Don't force chart connections that aren't there.
 
-  return callClaude(system, [{ role: 'user', content: user }], 1200);
+Keep it tight: ~250-400 words for shorter spreads, up to ~700 for the Celtic Cross.`;
+
+  // Token cap scales with spread depth: small spreads stay tight, Celtic
+  // Cross (10 cards) needs room to walk every position without truncating.
+  const maxTokens = spread === 'celticCross' ? 2000 : spread === 'relationship' ? 1500 : 1200;
+  return callClaude(system, [{ role: 'user', content: user }], maxTokens);
 }
