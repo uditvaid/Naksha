@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
@@ -34,7 +34,10 @@ export default function ProfileScreen() {
     return d;
   })();
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showFontSizeModal, setShowFontSizeModal] = useState(false);
   const [pickerTime, setPickerTime] = useState<Date>(initialTime);
+
+  const fontSizeLabel: string = currentFontOption === 'default' ? 'Default' : currentFontOption === 'large' ? 'Large' : 'Extra Large';
 
   const formatNotifTime = (h: number, m: number) => {
     const d = new Date();
@@ -183,6 +186,24 @@ export default function ProfileScreen() {
                 <Text style={styles.accountRowArrow}>→</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={styles.accountRow}
+              onPress={() => {
+                // Re-seed the picker from the persisted time each open so
+                // the spinner reflects the saved value, not stale state.
+                const seed = new Date();
+                seed.setHours(notifHour, notifMinute, 0, 0);
+                setPickerTime(seed);
+                setShowTimePicker(true);
+              }}
+            >
+              <Text style={styles.accountRowText}>Daily Affirmation Time</Text>
+              <Text style={styles.accountRowValue}>{formatNotifTime(notifHour, notifMinute)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.accountRow} onPress={() => setShowFontSizeModal(true)}>
+              <Text style={styles.accountRowText}>Text Size</Text>
+              <Text style={styles.accountRowValue}>{fontSizeLabel}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.accountRow} onPress={handleRestorePurchases}>
               <Text style={styles.accountRowText}>Restore Purchases</Text>
               <Text style={styles.accountRowArrow}>→</Text>
@@ -198,102 +219,6 @@ export default function ProfileScreen() {
             <TouchableOpacity style={[styles.accountRow, styles.accountRowDanger]} onPress={handleReset}>
               <Text style={[styles.accountRowText, { color: Colors.ruby }]}>Reset Profile</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Daily affirmation time — controls when the push notification
-            fires. Default 8:00 AM. The reschedule effect in app/_layout.tsx
-            picks up changes immediately because it depends on the same
-            store fields we write to here. */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>DAILY AFFIRMATION TIME</Text>
-          <Text style={styles.fontScaleHint}>
-            When you'd like the daily affirmation push notification to arrive each day.
-          </Text>
-          <TouchableOpacity
-            style={styles.notifTimeRow}
-            onPress={() => {
-              // Re-seed the picker from the persisted time each open so
-              // the spinner reflects the saved value, not stale state.
-              const seed = new Date();
-              seed.setHours(notifHour, notifMinute, 0, 0);
-              setPickerTime(seed);
-              setShowTimePicker(true);
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.notifTimeLabel}>Notify me at</Text>
-            <Text style={styles.notifTimeValue}>{formatNotifTime(notifHour, notifMinute)}</Text>
-          </TouchableOpacity>
-          {showTimePicker && (
-            <View style={styles.notifPickerWrap}>
-              <DateTimePicker
-                value={pickerTime}
-                mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(_evt, picked) => {
-                  if (Platform.OS === 'android') {
-                    // Android's modal returns once with the chosen value, then dismisses.
-                    setShowTimePicker(false);
-                    if (picked) {
-                      setUser({
-                        notificationHour: picked.getHours(),
-                        notificationMinute: picked.getMinutes(),
-                      });
-                    }
-                    return;
-                  }
-                  // iOS spinner streams onChange — buffer in pickerTime, commit on Confirm.
-                  if (picked) setPickerTime(picked);
-                }}
-                themeVariant="dark"
-                textColor={Colors.star}
-              />
-              {Platform.OS === 'ios' && (
-                <View style={styles.notifPickerActions}>
-                  <TouchableOpacity onPress={() => setShowTimePicker(false)}>
-                    <Text style={styles.notifPickerCancel}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setUser({
-                        notificationHour: pickerTime.getHours(),
-                        notificationMinute: pickerTime.getMinutes(),
-                      });
-                      setShowTimePicker(false);
-                    }}
-                  >
-                    <Text style={styles.notifPickerConfirm}>Confirm</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-
-        {/* Display — text size override on top of iOS Dynamic Type. */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>DISPLAY</Text>
-          <Text style={styles.fontScaleHint}>
-            Text size in the app. iOS system Larger Text (Settings → Accessibility → Display & Text Size) is also respected on top of this.
-          </Text>
-          <View style={styles.fontScaleRow}>
-            {(['default', 'large', 'xlarge'] as FontScaleOption[]).map((opt) => {
-              const active = currentFontOption === opt;
-              const label = opt === 'default' ? 'Default' : opt === 'large' ? 'Large' : 'Extra Large';
-              const sample = opt === 'default' ? 14 : opt === 'large' ? 16 : 18;
-              return (
-                <TouchableOpacity
-                  key={opt}
-                  style={[styles.fontScaleBtn, active && styles.fontScaleBtnActive]}
-                  onPress={() => setUser({ fontScale: fontScaleValue(opt) })}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.fontScaleSample, { fontSize: sample }, active && styles.fontScaleSampleActive]}>Aa</Text>
-                  <Text style={[styles.fontScaleLabel, active && styles.fontScaleLabelActive]}>{label}</Text>
-                </TouchableOpacity>
-              );
-            })}
           </View>
         </View>
 
@@ -385,6 +310,93 @@ export default function ProfileScreen() {
         </TouchableOpacity>
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Daily affirmation time picker — modal sheet from below.
+          The reschedule effect in app/_layout.tsx picks up changes to
+          notificationHour/Minute immediately. */}
+      <Modal
+        visible={showTimePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTimePicker(false)}
+      >
+        <View style={styles.settingModalOverlay}>
+          <View style={styles.settingModalCard}>
+            <Text style={styles.settingModalTitle}>Daily Affirmation Time</Text>
+            <Text style={styles.settingModalSub}>When you'd like the daily affirmation push notification to arrive each day.</Text>
+            <DateTimePicker
+              value={pickerTime}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={(_evt, picked) => {
+                if (Platform.OS === 'android') {
+                  setShowTimePicker(false);
+                  if (picked) {
+                    setUser({ notificationHour: picked.getHours(), notificationMinute: picked.getMinutes() });
+                  }
+                  return;
+                }
+                if (picked) setPickerTime(picked);
+              }}
+              themeVariant="dark"
+              textColor={Colors.star}
+            />
+            {Platform.OS === 'ios' && (
+              <View style={styles.settingModalActions}>
+                <TouchableOpacity onPress={() => setShowTimePicker(false)} style={styles.settingModalActionBtn}>
+                  <Text style={styles.notifPickerCancel}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setUser({ notificationHour: pickerTime.getHours(), notificationMinute: pickerTime.getMinutes() });
+                    setShowTimePicker(false);
+                  }}
+                  style={styles.settingModalActionBtn}
+                >
+                  <Text style={styles.notifPickerConfirm}>Confirm</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Text size picker — same modal sheet pattern. iOS Dynamic Type
+          is respected on top of this in-app override. */}
+      <Modal
+        visible={showFontSizeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFontSizeModal(false)}
+      >
+        <View style={styles.settingModalOverlay}>
+          <View style={styles.settingModalCard}>
+            <Text style={styles.settingModalTitle}>Text Size</Text>
+            <Text style={styles.settingModalSub}>Text size in the app. iOS Larger Text (Settings → Accessibility → Display & Text Size) is also respected on top of this.</Text>
+            <View style={styles.fontScaleRow}>
+              {(['default', 'large', 'xlarge'] as FontScaleOption[]).map((opt) => {
+                const active = currentFontOption === opt;
+                const label = opt === 'default' ? 'Default' : opt === 'large' ? 'Large' : 'Extra Large';
+                const sample = opt === 'default' ? 14 : opt === 'large' ? 16 : 18;
+                return (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[styles.fontScaleBtn, active && styles.fontScaleBtnActive]}
+                    onPress={() => setUser({ fontScale: fontScaleValue(opt) })}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.fontScaleSample, { fontSize: sample }, active && styles.fontScaleSampleActive]}>Aa</Text>
+                    <Text style={[styles.fontScaleLabel, active && styles.fontScaleLabelActive]}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity onPress={() => setShowFontSizeModal(false)} style={styles.settingModalDone}>
+              <Text style={styles.settingModalDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -417,12 +429,17 @@ const styles = StyleSheet.create({
   upgradeTagText: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },
   section: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
   sectionTitle: { fontSize: 10, letterSpacing: 2, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 10 },
-  fontScaleHint: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 18, marginBottom: 12 },
-  notifTimeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, paddingHorizontal: Spacing.md, paddingVertical: 14 },
-  notifTimeLabel: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson },
-  notifTimeValue: { fontSize: 16, color: Colors.gold, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
-  notifPickerWrap: { marginTop: 8, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, paddingVertical: 8 },
-  notifPickerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, paddingHorizontal: Spacing.md, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
+  // Setting modal sheets — used by both Daily Affirmation Time and Text
+  // Size pickers. Centered card over a dim overlay (matches the AI
+  // disclosure modal pattern in app/(tabs)/index.tsx).
+  settingModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: Spacing.md },
+  settingModalCard: { width: '100%', backgroundColor: Colors.deepNavy, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.md },
+  settingModalTitle: { fontSize: 16, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 0.5, marginBottom: 6 },
+  settingModalSub: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 18, marginBottom: 14 },
+  settingModalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
+  settingModalActionBtn: { paddingHorizontal: 4, paddingVertical: 4 },
+  settingModalDone: { backgroundColor: Colors.gold, borderRadius: Radius.lg, paddingVertical: 12, alignItems: 'center', marginTop: 14 },
+  settingModalDoneText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5 },
   notifPickerCancel: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
   notifPickerConfirm: { fontSize: 14, color: Colors.gold, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
   fontScaleRow: { flexDirection: 'row', gap: 10 },
@@ -450,6 +467,7 @@ const styles = StyleSheet.create({
   accountRowDanger: { borderBottomWidth: 0 },
   accountRowText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star, flex: 1 },
   accountRowArrow: { fontSize: 16, color: Colors.muted },
+  accountRowValue: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 0.3 },
   version: { textAlign: 'center', fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginBottom: 8 },
   testNote: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, paddingHorizontal: 4, paddingTop: 8, lineHeight: 16 },
   diagBox: { marginTop: 10, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: Radius.md, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
