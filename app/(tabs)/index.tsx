@@ -11,6 +11,7 @@ import { DailyShareButton } from '@components/DailyShareButton';
 import { useDailyContinuityStore, DailyRecord } from '@store/dailyContinuityStore';
 import { todaysAffirmation, todaysFocus } from '@lib/dailyAffirmation';
 import { usePanchang, panchangSummaryLine } from '@lib/panchang';
+import { buildAffirmationContext } from '@lib/affirmationContext';
 import { AuspiciousPeriodsCard } from '@components/AuspiciousPeriodsCard';
 import { findActiveDasha, findActiveAntardasha } from '@utils/vedic';
 
@@ -71,6 +72,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAIDisclosure, setShowAIDisclosure] = useState(false);
   const [showReadingModal, setShowReadingModal] = useState(false);
+  const [showAffirmationModal, setShowAffirmationModal] = useState(false);
   // When set, the modal renders this past record instead of today's reading.
   const [archivedRecord, setArchivedRecord] = useState<DailyRecord | null>(null);
 
@@ -119,6 +121,13 @@ export default function HomeScreen() {
   // affirmation surface is unaffected.
   const panchang = usePanchang(birthData, nowTick);
   const panchangLine = useMemo(() => panchangSummaryLine(panchang, nowTick), [panchang, nowTick]);
+  // Composed deterministically — no Claude call. Refreshes when nowTick
+  // bumps (focus / app-resume / midnight) so the modal narrative tracks
+  // the same date as the affirmation it's explaining.
+  const affirmationContext = useMemo(
+    () => buildAffirmationContext(panchang, chartDerived.activeDasha?.planet, nowTick),
+    [panchang, chartDerived.activeDasha?.planet, nowTick],
+  );
   const dailyFocus = useMemo(
     () => todaysFocus(activeDasha?.planet),
     [activeDasha?.planet, nowTick],
@@ -253,6 +262,54 @@ export default function HomeScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Affirmation drill-down — explains why today's affirmation lands
+          given the panchang (weekday ruler, current nakshatra, paksha)
+          and the active mahadasha. Composed deterministically by
+          buildAffirmationContext — no API call. */}
+      <Modal
+        visible={showAffirmationModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAffirmationModal(false)}
+      >
+        <SafeAreaView style={styles.affirmationModalContainer}>
+          <View style={styles.affirmationModalHeader}>
+            <Text style={styles.affirmationModalTitle}>Today's Affirmation</Text>
+            <TouchableOpacity onPress={() => setShowAffirmationModal(false)} style={styles.affirmationModalClose}>
+              <Text style={styles.affirmationModalCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: Spacing.md, paddingBottom: 60 }}>
+            {panchangLine && (
+              <Text style={styles.affirmationModalPanchang}>{panchangLine}</Text>
+            )}
+            <Text style={styles.affirmationModalQuote}>{dailyAffirmation}</Text>
+
+            <Text style={styles.affirmationModalSectionTitle}>WHY THIS LANDS TODAY</Text>
+            <Text style={styles.affirmationModalParagraph}>{affirmationContext.whyToday}</Text>
+
+            {affirmationContext.currentChapter && (
+              <>
+                <Text style={styles.affirmationModalSectionTitle}>YOUR CURRENT CHAPTER</Text>
+                <Text style={styles.affirmationModalParagraph}>{affirmationContext.currentChapter}</Text>
+              </>
+            )}
+
+            <Text style={styles.affirmationModalSectionTitle}>TOP 3 TO FOCUS ON</Text>
+            {dailyFocus.map((line, i) => (
+              <View key={`af-focus-${i}`} style={styles.affirmationModalBulletRow}>
+                <Text style={styles.affirmationModalBulletNum}>{i + 1}.</Text>
+                <Text style={styles.affirmationModalBulletText}>{line}</Text>
+              </View>
+            ))}
+
+            <Text style={styles.affirmationModalFooter}>
+              Affirmations rotate daily through a curated set — the words above are today's. Use them as a thought to keep returning to.
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       {/* One-time AI disclosure modal */}
       <Modal visible={showAIDisclosure} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -320,7 +377,11 @@ export default function HomeScreen() {
             yet so the affirmation surface stays unaffected. */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>TODAY'S AFFIRMATION</Text>
-          <View style={styles.affirmationCard}>
+          <TouchableOpacity
+            style={styles.affirmationCard}
+            onPress={() => setShowAffirmationModal(true)}
+            activeOpacity={0.85}
+          >
             {panchangLine && <Text style={styles.panchangContextLine}>{panchangLine}</Text>}
             <Text style={styles.affirmationText}>{dailyAffirmation}</Text>
             <View style={styles.focusDivider} />
@@ -330,7 +391,8 @@ export default function HomeScreen() {
                 <Text style={styles.focusNum}>{i + 1}.</Text> {line}
               </Text>
             ))}
-          </View>
+            <Text style={styles.affirmationTapHint}>Tap to see why this lands today →</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Today's auspicious + inauspicious time windows.
@@ -475,6 +537,20 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 10, letterSpacing: 2.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 10 },
   readingCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
   affirmationCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.gold + '55', borderRadius: Radius.lg, padding: Spacing.md, gap: 4 },
+  affirmationTapHint: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cinzel, opacity: 0.75, letterSpacing: 0.5, marginTop: 10, textAlign: 'center' },
+  affirmationModalContainer: { flex: 1, backgroundColor: Colors.midnight },
+  affirmationModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  affirmationModalTitle: { fontSize: 18, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 0.5 },
+  affirmationModalClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  affirmationModalCloseText: { fontSize: 18, color: Colors.muted },
+  affirmationModalPanchang: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cormorantItalic, letterSpacing: 0.5, opacity: 0.8, textAlign: 'center', marginBottom: 12 },
+  affirmationModalQuote: { fontSize: 22, color: Colors.star, fontFamily: Fonts.cormorantItalic, lineHeight: 32, textAlign: 'center', marginBottom: Spacing.lg },
+  affirmationModalSectionTitle: { fontSize: 11, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginTop: Spacing.md, marginBottom: 8 },
+  affirmationModalParagraph: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 24, opacity: 0.92, marginBottom: 4 },
+  affirmationModalBulletRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 8 },
+  affirmationModalBulletNum: { fontSize: 14, color: Colors.gold, fontFamily: Fonts.cinzel, marginTop: 1 },
+  affirmationModalBulletText: { flex: 1, fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22 },
+  affirmationModalFooter: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, lineHeight: 18, marginTop: Spacing.lg, opacity: 0.7, textAlign: 'center' },
   // Quiet Panchang context line above the affirmation — small, muted, italic
   // so the affirmation itself remains the visual anchor of the card.
   panchangContextLine: { fontSize: 11, letterSpacing: 0.5, color: Colors.gold, fontFamily: Fonts.cormorantItalic, opacity: 0.7, marginBottom: 6 },
