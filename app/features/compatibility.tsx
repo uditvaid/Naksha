@@ -10,6 +10,7 @@ import { useAppStore } from '@store/userStore';
 import { getCompatibilityReading } from '@services/claude';
 import { geocodePlace, generateChart, getAshtaKoota, PlaceNotFoundError } from '@services/prokerala';
 import { AshtakootaCard } from '@components/AshtakootaCard';
+import { AskGuruButton } from '@components/AskGuruButton';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { getChineseCompatibility, ELEMENT_DATA, BAZI_COMPATIBILITY, type ZodiacLevel } from '@utils/bazi';
 import { validatePlace, PLACE_FORMAT_EXAMPLES } from '@utils/placeValidation';
@@ -589,6 +590,8 @@ export default function CompatibilityScreen() {
                 </Text>
               )}
               <Text style={styles.readingText}>{reading}</Text>
+
+              <AskGuruButton seed={`I just read a compatibility reading between me and ${partnerName.trim() || 'my partner'}. Help me understand `} />
 
               {/* New reading */}
               <TouchableOpacity

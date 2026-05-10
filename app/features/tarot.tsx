@@ -9,6 +9,7 @@ import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { getTarotReading } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
+import { AskGuruButton } from '@components/AskGuruButton';
 import { shuffleAndDraw, type DrawnCard, type SpreadType } from '@utils/tarot';
 
 const SPREADS: { id: SpreadType; label: string; description: string; cardCount: number }[] = [
@@ -196,6 +197,7 @@ export default function TarotScreen() {
                 <View style={styles.readingBlock}>
                   <Text style={styles.readingLabel}>YOUR READING</Text>
                   <Text style={styles.readingText}>{reading}</Text>
+                  <AskGuruButton seed="I just drew a tarot spread. Help me understand " />
                 </View>
               )}
 

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore, SavedReading } from '@store/userStore';
+import { AskGuruButton } from '@components/AskGuruButton';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 
 const TYPE_LABELS: Record<SavedReading['type'], { label: string; icon: string; color: string }> = {
@@ -177,6 +178,8 @@ export default function SavedReadingsScreen() {
                 </View>
               )}
               <Text style={styles.modalContent}>{selected.content}</Text>
+
+              <AskGuruButton seed={`I'm revisiting my saved reading "${selected.title}". Help me understand `} />
 
               <TouchableOpacity
                 style={styles.deleteFullBtn}

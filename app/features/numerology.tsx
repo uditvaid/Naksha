@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
 import { getNumerologyReading } from '@services/claude';
 import { calculateLifePathNumber, calculateDestinyNumber, calculateSoulUrge, calculatePersonalityNumber } from '@utils/vedic';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
+import { KIND_LENS, profileForNumber, type NumberKind } from '@lib/numerologyDetails';
+import { AskGuruButton } from '@components/AskGuruButton';
 
 // Defensive markdown strip — Haiku occasionally emits headers / bold even
 // when the system prompt asks for plain prose, and this screen renders raw.
@@ -41,6 +43,7 @@ export default function NumerologyScreen() {
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
   const [numbers, setNumbers] = useState<Record<string, number> | null>(null);
+  const [selectedNumber, setSelectedNumber] = useState<{ kind: NumberKind; value: number } | null>(null);
 
   if (!user.isPremium) {
     return (
@@ -136,12 +139,13 @@ export default function NumerologyScreen() {
         {numbers && (
           <View style={styles.numbersSection}>
             <Text style={styles.sectionTitle}>YOUR CORE NUMBERS</Text>
+            <Text style={styles.tapHint}>Tap any number for plain-English context →</Text>
             <View style={styles.numbersGrid}>
-              <NumberCard label="Life Path" number={numbers.lifePathNumber} isPrimary />
-              <NumberCard label="Destiny" number={numbers.destinyNumber} />
-              <NumberCard label="Soul Urge" number={numbers.soulUrgeNumber} />
-              <NumberCard label="Personality" number={numbers.personalityNumber} />
-              <NumberCard label="Birthday" number={numbers.birthdayNumber} />
+              <NumberCard label="Life Path" number={numbers.lifePathNumber} isPrimary onPress={() => setSelectedNumber({ kind: 'lifePath', value: numbers.lifePathNumber })} />
+              <NumberCard label="Destiny" number={numbers.destinyNumber} onPress={() => setSelectedNumber({ kind: 'destiny', value: numbers.destinyNumber })} />
+              <NumberCard label="Soul Urge" number={numbers.soulUrgeNumber} onPress={() => setSelectedNumber({ kind: 'soulUrge', value: numbers.soulUrgeNumber })} />
+              <NumberCard label="Personality" number={numbers.personalityNumber} onPress={() => setSelectedNumber({ kind: 'personality', value: numbers.personalityNumber })} />
+              <NumberCard label="Birthday" number={numbers.birthdayNumber} onPress={() => setSelectedNumber({ kind: 'birthday', value: numbers.birthdayNumber })} />
             </View>
 
             {/* Life Path detail */}
@@ -160,21 +164,99 @@ export default function NumerologyScreen() {
           <View style={styles.readingCard}>
             <Text style={styles.readingLabel}>✦ NUMEROLOGY READING ✦{'\n'}AI-Generated Analysis</Text>
             <Text style={styles.readingText}>{reading}</Text>
+            <AskGuruButton
+              seed={`I just read my numerology profile (Life Path ${numbers?.lifePathNumber}, Destiny ${numbers?.destinyNumber}, Soul Urge ${numbers?.soulUrgeNumber}). Help me understand `}
+            />
           </View>
         )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Per-number detail modal — opens when any NumberCard is tapped.
+          Combines the number's universal profile (1-9, 11/22/33) with
+          the slot-specific lens (lifePath / destiny / etc.) so the same
+          5 reads differently as a Life Path vs a Soul Urge. */}
+      <Modal
+        visible={selectedNumber !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedNumber(null)}
+      >
+        {selectedNumber && (() => {
+          const lens = KIND_LENS[selectedNumber.kind];
+          const profile = profileForNumber(selectedNumber.value);
+          return (
+            <SafeAreaView style={styles.detailModalContainer}>
+              <View style={styles.detailModalHeader}>
+                <Text style={styles.detailModalLabel}>{lens.label} · {selectedNumber.value}</Text>
+                <TouchableOpacity onPress={() => setSelectedNumber(null)} style={styles.detailModalClose}>
+                  <Text style={styles.detailModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: Spacing.md, paddingBottom: 60 }}>
+                <Text style={styles.detailModalTitle}>{profile.title}</Text>
+                <Text style={styles.detailModalTraits}>{profile.traits}</Text>
+
+                <Text style={styles.detailModalSectionTitle}>WHAT THIS SLOT TRACKS</Text>
+                <Text style={styles.detailModalParagraph}>{lens.oneLiner}</Text>
+
+                <Text style={styles.detailModalSectionTitle}>ABOUT NUMBER {selectedNumber.value}</Text>
+                <Text style={styles.detailModalParagraph}>{profile.description}</Text>
+                <Text style={styles.detailModalParagraph}>
+                  {lens.framingOpen} this is the energy that runs through {selectedNumber.kind === 'lifePath' ? 'your soul\'s journey' : selectedNumber.kind === 'destiny' ? 'what you\'re here to build' : selectedNumber.kind === 'soulUrge' ? 'what you most deeply want' : selectedNumber.kind === 'personality' ? 'how others first read you' : 'a natural gift from your birthday'}.
+                </Text>
+
+                {profile.strengths.length > 0 && (
+                  <>
+                    <Text style={styles.detailModalSectionTitle}>STRENGTHS</Text>
+                    {profile.strengths.map((s, i) => (
+                      <View key={`s-${i}`} style={styles.detailModalBulletRow}>
+                        <Text style={[styles.detailModalBulletDot, { color: Colors.gold }]}>·</Text>
+                        <Text style={styles.detailModalBulletText}>{s}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {profile.challenges.length > 0 && (
+                  <>
+                    <Text style={styles.detailModalSectionTitle}>CHALLENGES TO WATCH</Text>
+                    {profile.challenges.map((c, i) => (
+                      <View key={`c-${i}`} style={styles.detailModalBulletRow}>
+                        <Text style={[styles.detailModalBulletDot, { color: Colors.amber }]}>·</Text>
+                        <Text style={styles.detailModalBulletText}>{c}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {profile.leanInto && (
+                  <>
+                    <Text style={styles.detailModalSectionTitle}>LEAN INTO</Text>
+                    <Text style={styles.detailModalLeanInto}>{profile.leanInto}</Text>
+                  </>
+                )}
+              </ScrollView>
+            </SafeAreaView>
+          );
+        })()}
+      </Modal>
     </SafeAreaView>
   );
 }
 
-function NumberCard({ label, number, isPrimary }: { label: string; number: number; isPrimary?: boolean }) {
+function NumberCard({ label, number, isPrimary, onPress }: { label: string; number: number; isPrimary?: boolean; onPress?: () => void }) {
   return (
-    <View style={[styles.numberCard, isPrimary && styles.numberCardPrimary]}>
+    <TouchableOpacity
+      style={[styles.numberCard, isPrimary && styles.numberCardPrimary]}
+      onPress={onPress}
+      activeOpacity={0.85}
+      disabled={!onPress}
+    >
       <Text style={[styles.numberLabel, isPrimary && styles.numberLabelPrimary]}>{label}</Text>
       <Text style={[styles.numberValue, isPrimary && styles.numberValuePrimary]}>{number}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -211,4 +293,20 @@ const styles = StyleSheet.create({
   saveBtnSaved: { backgroundColor: Colors.emerald + '22', borderColor: Colors.emerald },
   saveBtnText: { fontSize: 11, fontFamily: Fonts.cinzel, color: Colors.gold },
   readingText: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 26 },
+  tapHint: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cormorantItalic, opacity: 0.85, marginBottom: 10 },
+
+  // Detail modal — opened by tapping a NumberCard
+  detailModalContainer: { flex: 1, backgroundColor: Colors.midnight },
+  detailModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  detailModalLabel: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 2 },
+  detailModalClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  detailModalCloseText: { fontSize: 18, color: Colors.muted },
+  detailModalTitle: { fontSize: 26, fontFamily: Fonts.cinzel, color: Colors.gold, textAlign: 'center', marginTop: 4 },
+  detailModalTraits: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cormorantItalic, textAlign: 'center', marginTop: 4, marginBottom: Spacing.md },
+  detailModalSectionTitle: { fontSize: 11, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginTop: Spacing.lg, marginBottom: 10 },
+  detailModalParagraph: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 24, marginBottom: 6 },
+  detailModalBulletRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 6 },
+  detailModalBulletDot: { fontSize: 16, marginTop: 1 },
+  detailModalBulletText: { flex: 1, fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, opacity: 0.9 },
+  detailModalLeanInto: { fontSize: 15, color: Colors.star, fontFamily: Fonts.cormorantItalic, lineHeight: 24, marginBottom: 6 },
 });

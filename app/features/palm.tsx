@@ -8,6 +8,7 @@ import { useAppStore } from '@store/userStore';
 import { useShallow } from 'zustand/react/shallow';
 import { analyzePalm } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
+import { AskGuruButton } from '@components/AskGuruButton';
 
 // Cap palm photos at 1024px on the long edge before sending. Modern phone
 // cameras shoot 4032×3024 (~3-7 MB JPEG). Resizing here cuts the base64
@@ -205,6 +206,7 @@ export default function PalmScreen() {
           <View style={styles.readingCard}>
             <Text style={styles.readingLabel}>✦ YOUR PALM READING ✦{'\n'}AI-Generated Analysis</Text>
             <Text style={styles.readingText}>{reading}</Text>
+            <AskGuruButton seed="I just got my palm reading. Help me understand " />
             <TouchableOpacity style={styles.newReadingBtn} onPress={() => { setReading(''); setImageUri(null); }}>
               <Text style={styles.newReadingBtnText}>Read Another Hand</Text>
             </TouchableOpacity>

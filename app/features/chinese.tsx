@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '@store/userStore';
+import { AskGuruButton } from '@components/AskGuruButton';
 import { getChineseReading } from '@services/claude';
 import { CHINESE_ZODIAC } from '@constants/astrology';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
@@ -607,6 +608,7 @@ export default function ChineseScreen() {
           <View style={styles.readingCard}>
             <Text style={styles.readingLabel}>✦ YOUR BAZI READING ✦{'\n'}AI-Generated Analysis</Text>
             <Text style={styles.readingText}>{reading}</Text>
+            <AskGuruButton seed="I just read my Chinese astrology / BaZi profile. Help me understand " />
             <TouchableOpacity style={styles.resetBtn} onPress={() => setReading('')}>
               <Text style={styles.resetBtnText}>Get New Reading</Text>
             </TouchableOpacity>
