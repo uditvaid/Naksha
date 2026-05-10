@@ -18,7 +18,11 @@ export function onAppReset(listener: ResetListener): () => void {
 }
 
 export function fireAppReset(): void {
-  resetListeners.forEach((fn) => {
+  // Snapshot to an array before iterating — protects against listeners
+  // that mutate the Set during iteration (e.g., a reset action that
+  // triggers another store's reset which unregisters itself).
+  const snapshot = Array.from(resetListeners);
+  for (const fn of snapshot) {
     try { fn(); } catch { /* swallow listener errors */ }
-  });
+  }
 }

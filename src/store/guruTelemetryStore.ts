@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { onAppReset } from './appReset';
 import {
   EngagementTelemetry,
   EMPTY_TELEMETRY,
@@ -23,6 +24,7 @@ interface TelemetryActions {
   recordSession: (input: SessionInput) => void;
   isDisengaged: () => boolean;
   getPreferredLength: () => EngagementTelemetry['preferredResponseLength'];
+  reset: () => void;
 }
 
 export type GuruTelemetryState = EngagementTelemetry & TelemetryActions;
@@ -47,6 +49,8 @@ export const useGuruTelemetryStore = create<GuruTelemetryState>()(
       isDisengaged: () => get().disengagementSignal,
 
       getPreferredLength: () => get().preferredResponseLength,
+
+      reset: () => set(EMPTY_TELEMETRY),
     }),
     {
       name: 'naksha-guru-telemetry',
@@ -55,3 +59,8 @@ export const useGuruTelemetryStore = create<GuruTelemetryState>()(
     }
   )
 );
+
+// Clear telemetry when the user signs out / resets — matches the
+// pattern used by the other 8 stores so account-swap doesn't carry
+// the previous user's engagement signals forward.
+onAppReset(() => useGuruTelemetryStore.getState().reset());

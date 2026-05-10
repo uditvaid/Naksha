@@ -147,6 +147,11 @@ export function formatLocalTime(isoWithTz: string): string {
   let h = parseInt(match[1]!, 10);
   const m = parseInt(match[2]!, 10);
   if (Number.isNaN(h) || Number.isNaN(m)) return '';
+  // Defensive: the regex `\d{2}` matches values like "T99:99" which
+  // would format as "1:39 PM" silently. Reject obviously-invalid hours
+  // and minutes — Prokerala never returns invalid times in practice,
+  // but a malformed response shouldn't render nonsense.
+  if (h < 0 || h > 23 || m < 0 || m > 59) return '';
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
