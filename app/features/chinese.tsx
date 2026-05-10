@@ -478,21 +478,40 @@ export default function ChineseScreen() {
               );
             })}
 
-            {/* Strongest */}
-            <View style={[styles.infoCard, { borderColor: (ELEMENT_DATA[balance.strongest]?.color ?? Colors.gold) + '80' }]}>
-              <Text style={[styles.infoTitle, { color: ELEMENT_DATA[balance.strongest]?.color ?? Colors.gold }]}>
-                Dominant: {balance.strongest} {ELEMENT_DATA[balance.strongest]?.symbol ?? ''}
-              </Text>
+            {/* Strongest — tappable, opens the same Five Element deep
+                modal that the rows above use, with the "YOU HAVE A
+                LOT OF THIS" framing for the dominant element. */}
+            <TouchableOpacity
+              style={[styles.infoCard, { borderColor: (ELEMENT_DATA[balance.strongest]?.color ?? Colors.gold) + '80' }]}
+              onPress={() => setSelectedElement(balance.strongest)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.infoCardHeader}>
+                <Text style={[styles.infoTitle, { color: ELEMENT_DATA[balance.strongest]?.color ?? Colors.gold }]}>
+                  Dominant: {balance.strongest} {ELEMENT_DATA[balance.strongest]?.symbol ?? ''}
+                </Text>
+                <Text style={[styles.infoCardArrow, { color: ELEMENT_DATA[balance.strongest]?.color ?? Colors.gold }]}>→</Text>
+              </View>
               <Text style={styles.infoText}>{ELEMENT_BALANCE_TIPS[balance.strongest]?.excess ?? ''}</Text>
-            </View>
+              <Text style={styles.infoCardHint}>Tap for the full plain-English breakdown</Text>
+            </TouchableOpacity>
 
-            {/* Weakest */}
-            <View style={[styles.infoCard, { borderColor: (ELEMENT_DATA[balance.weakest]?.color ?? Colors.muted) + '60' }]}>
-              <Text style={[styles.infoTitle, { color: ELEMENT_DATA[balance.weakest]?.color ?? Colors.muted }]}>
-                Deficient: {balance.weakest} {ELEMENT_DATA[balance.weakest]?.symbol ?? ''}
-              </Text>
+            {/* Weakest — same tappable pattern, "YOU'RE LOW ON THIS"
+                framing in the modal. */}
+            <TouchableOpacity
+              style={[styles.infoCard, { borderColor: (ELEMENT_DATA[balance.weakest]?.color ?? Colors.muted) + '60' }]}
+              onPress={() => setSelectedElement(balance.weakest)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.infoCardHeader}>
+                <Text style={[styles.infoTitle, { color: ELEMENT_DATA[balance.weakest]?.color ?? Colors.muted }]}>
+                  Deficient: {balance.weakest} {ELEMENT_DATA[balance.weakest]?.symbol ?? ''}
+                </Text>
+                <Text style={[styles.infoCardArrow, { color: ELEMENT_DATA[balance.weakest]?.color ?? Colors.muted }]}>→</Text>
+              </View>
               <Text style={styles.infoText}>{ELEMENT_BALANCE_TIPS[balance.weakest]?.deficient ?? ''}</Text>
-            </View>
+              <Text style={styles.infoCardHint}>Tap for the full plain-English breakdown</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -930,7 +949,10 @@ const styles = StyleSheet.create({
   approxNote: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, textAlign: 'center', marginTop: 8, marginBottom: 12 },
 
   infoCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: 10 },
-  infoTitle: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.gold, marginBottom: 8 },
+  infoCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  infoCardArrow: { fontSize: 16, fontFamily: Fonts.cinzel, opacity: 0.7 },
+  infoCardHint: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, opacity: 0.7, marginTop: 6 },
+  infoTitle: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.gold },
   infoText: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 21 },
   pillarDetailCard: { marginTop: Spacing.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
   pillarDetailTitle: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.gold, marginBottom: 4, letterSpacing: 0.3 },

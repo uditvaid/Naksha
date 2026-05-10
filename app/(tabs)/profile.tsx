@@ -382,7 +382,7 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     key={opt}
                     style={[styles.fontScaleBtn, active && styles.fontScaleBtnActive]}
-                    onPress={() => setUser({ fontScale: fontScaleValue(opt) })}
+                    onPress={() => setUser({ fontScale: fontScaleValue(opt), fontScaleExplicit: true })}
                     activeOpacity={0.85}
                   >
                     <Text style={[styles.fontScaleSample, { fontSize: sample }, active && styles.fontScaleSampleActive]}>Aa</Text>

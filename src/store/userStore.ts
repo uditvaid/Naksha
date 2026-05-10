@@ -109,6 +109,11 @@ export interface UserProfile {
    *  iOS at 1.3x and in-app at 1.15x sees ~1.5x scale (capped at 1.5x
    *  by Text.defaultProps.maxFontSizeMultiplier to keep layouts intact). */
   fontScale: number;
+  /** True when the user has explicitly chosen a scale via the picker
+   *  (vs. it being the schema default). Future migrations should only
+   *  force-upgrade users where this is undefined/false — explicit
+   *  choices must be respected. */
+  fontScaleExplicit?: boolean;
   /** Hour-of-day (0-23) at which the daily affirmation push notification
    *  fires in the user's local timezone. Default 8 (8:00 AM). */
   notificationHour: number;
