@@ -40,9 +40,16 @@ TextAny.defaultProps.maxFontSizeMultiplier = 1.5;
 // (1.15) every Text in the app goes through the clone path so this fires
 // hundreds of times per screen. The subscribe call below keeps this cache
 // in sync with the store; the Text patch reads the local var instead.
+//
+// The subscribe-without-selector form fires on every store change (zustand
+// v4 doesn't expose subscribeWithSelector here without the middleware),
+// so the listener is hit on every setUser / setChart / setBirthData /
+// reading save. The early-out below makes the no-op case cost nothing
+// beyond a property read + comparison.
 let _currentScale = useAppStore.getState().user.fontScale ?? 1;
 useAppStore.subscribe((state) => {
-  _currentScale = state.user.fontScale ?? 1;
+  const next = state.user.fontScale ?? 1;
+  if (next !== _currentScale) _currentScale = next;
 });
 
 // Patch Text.render exactly once. The flag is checked + set in the same

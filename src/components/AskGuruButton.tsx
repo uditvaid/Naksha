@@ -37,20 +37,23 @@ export function AskGuruButton({ seed, label, onClose, style }: Props) {
 
   const onPress = () => {
     setPendingGuruContext(seed);
-    // Close the parent modal first (if there is one), then navigate.
-    // The 250ms delay matches the iOS modal-dismiss animation duration
-    // — without it, the navigation animation collides with the modal
-    // animation and feels jarring. Mirrors the existing pattern in
-    // app/(tabs)/chart.tsx:handleAskGuru.
-    onClose?.();
-    setTimeout(() => {
-      if (isPremium) {
-        router.push('/(tabs)/guru');
-      } else {
-        // Non-premium users land on paywall — Guru is gated.
-        router.push('/paywall');
-      }
-    }, 250);
+    // When mounted inside a Modal, close it first and wait for the iOS
+    // modal-dismiss animation to clear (~250ms) before navigating —
+    // without that, the nav animation collides with the modal
+    // animation and the transition feels jarring (and on iOS the
+    // navigation can happen *under* the still-dismissing modal).
+    // When mounted on a regular screen there's no modal to wait for,
+    // so navigate immediately for a snappier response.
+    const navigate = () => {
+      if (isPremium) router.push('/(tabs)/guru');
+      else router.push('/paywall');
+    };
+    if (onClose) {
+      onClose();
+      setTimeout(navigate, 250);
+    } else {
+      navigate();
+    }
   };
 
   return (
