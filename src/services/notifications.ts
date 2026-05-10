@@ -36,10 +36,27 @@ export async function setupAndroidChannel(): Promise<void> {
 
 let _scheduleInflight: Promise<void> | null = null;
 
-export async function scheduleDailyInsightNotification(activeDashaLord?: string): Promise<void> {
+interface ScheduleOpts {
+  /** Hour-of-day (0-23) in the user's local timezone. Default 8. */
+  hour?: number;
+  /** Minute-of-hour (0-59). Default 0. */
+  minute?: number;
+}
+
+export async function scheduleDailyInsightNotification(
+  activeDashaLord?: string,
+  opts: ScheduleOpts = {},
+): Promise<void> {
   if (Platform.OS === 'web') return;
 
   if (_scheduleInflight) return _scheduleInflight;
+
+  // Clamp to valid hour/minute ranges defensively — a corrupt persisted
+  // value shouldn't crash the scheduler.
+  const rawHour = opts.hour ?? 8;
+  const rawMinute = opts.minute ?? 0;
+  const hour = Math.max(0, Math.min(23, Math.trunc(rawHour)));
+  const minute = Math.max(0, Math.min(59, Math.trunc(rawMinute)));
 
   _scheduleInflight = (async () => {
     try {
@@ -67,8 +84,8 @@ export async function scheduleDailyInsightNotification(activeDashaLord?: string)
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-          hour: 8,
-          minute: 0,
+          hour,
+          minute,
           repeats: true,
         },
       });

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { useAppStore } from '@store/userStore';
@@ -21,6 +22,25 @@ export default function ProfileScreen() {
   const setUser = useAppStore(s => s.setUser);
   const reset = useAppStore(s => s.reset);
   const currentFontOption: FontScaleOption = fontScaleOption(user.fontScale ?? 1);
+
+  // Notification time picker state — `pickerTime` is the spinner's
+  // in-flight value, copied to the store only on Confirm to avoid
+  // iOS spinner's spurious onChange-on-mount clobbering the saved time.
+  const notifHour = user.notificationHour ?? 8;
+  const notifMinute = user.notificationMinute ?? 0;
+  const initialTime = (() => {
+    const d = new Date();
+    d.setHours(notifHour, notifMinute, 0, 0);
+    return d;
+  })();
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [pickerTime, setPickerTime] = useState<Date>(initialTime);
+
+  const formatNotifTime = (h: number, m: number) => {
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
@@ -181,6 +201,76 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Daily affirmation time — controls when the push notification
+            fires. Default 8:00 AM. The reschedule effect in app/_layout.tsx
+            picks up changes immediately because it depends on the same
+            store fields we write to here. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>DAILY AFFIRMATION TIME</Text>
+          <Text style={styles.fontScaleHint}>
+            When you'd like the daily affirmation push notification to arrive each day.
+          </Text>
+          <TouchableOpacity
+            style={styles.notifTimeRow}
+            onPress={() => {
+              // Re-seed the picker from the persisted time each open so
+              // the spinner reflects the saved value, not stale state.
+              const seed = new Date();
+              seed.setHours(notifHour, notifMinute, 0, 0);
+              setPickerTime(seed);
+              setShowTimePicker(true);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.notifTimeLabel}>Notify me at</Text>
+            <Text style={styles.notifTimeValue}>{formatNotifTime(notifHour, notifMinute)}</Text>
+          </TouchableOpacity>
+          {showTimePicker && (
+            <View style={styles.notifPickerWrap}>
+              <DateTimePicker
+                value={pickerTime}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_evt, picked) => {
+                  if (Platform.OS === 'android') {
+                    // Android's modal returns once with the chosen value, then dismisses.
+                    setShowTimePicker(false);
+                    if (picked) {
+                      setUser({
+                        notificationHour: picked.getHours(),
+                        notificationMinute: picked.getMinutes(),
+                      });
+                    }
+                    return;
+                  }
+                  // iOS spinner streams onChange — buffer in pickerTime, commit on Confirm.
+                  if (picked) setPickerTime(picked);
+                }}
+                themeVariant="dark"
+                textColor={Colors.star}
+              />
+              {Platform.OS === 'ios' && (
+                <View style={styles.notifPickerActions}>
+                  <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                    <Text style={styles.notifPickerCancel}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setUser({
+                        notificationHour: pickerTime.getHours(),
+                        notificationMinute: pickerTime.getMinutes(),
+                      });
+                      setShowTimePicker(false);
+                    }}
+                  >
+                    <Text style={styles.notifPickerConfirm}>Confirm</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
         {/* Display — text size override on top of iOS Dynamic Type. */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>DISPLAY</Text>
@@ -328,6 +418,13 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
   sectionTitle: { fontSize: 10, letterSpacing: 2, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 10 },
   fontScaleHint: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 18, marginBottom: 12 },
+  notifTimeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, paddingHorizontal: Spacing.md, paddingVertical: 14 },
+  notifTimeLabel: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson },
+  notifTimeValue: { fontSize: 16, color: Colors.gold, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
+  notifPickerWrap: { marginTop: 8, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, paddingVertical: 8 },
+  notifPickerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 24, paddingHorizontal: Spacing.md, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.cardBorder },
+  notifPickerCancel: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
+  notifPickerConfirm: { fontSize: 14, color: Colors.gold, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
   fontScaleRow: { flexDirection: 'row', gap: 10 },
   fontScaleBtn: { flex: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, paddingVertical: 14, alignItems: 'center', gap: 4 },
   fontScaleBtnActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },

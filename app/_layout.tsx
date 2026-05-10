@@ -24,6 +24,10 @@ export default function RootLayout() {
   // render, so existing components only pick up the new size after a
   // re-render — keying the root makes that happen instantly.
   const fontScale = useAppStore(s => s.user.fontScale ?? 1);
+  // Notification time preference — re-running schedule effect when these
+  // change is what makes the Profile time picker feel instant.
+  const notifHour = useAppStore(s => s.user.notificationHour ?? 8);
+  const notifMinute = useAppStore(s => s.user.notificationMinute ?? 0);
   // Derive active dasha at read time so the daily-insight notification reschedules
   // when the user crosses a mahadasha boundary even without regenerating the chart.
   const activeDashaLord = findActiveDasha(dashas)?.planet;
@@ -81,14 +85,16 @@ export default function RootLayout() {
     return () => { mounted = false; };
   }, [setPremium]);
 
-  // Re-schedule the daily insight notification whenever the active Mahadasha lord changes
-  // (after onboarding, chart regeneration, or a natural dasha transition).
+  // Re-schedule the daily insight notification whenever the active Mahadasha lord
+  // OR the user's preferred notification time changes (Profile → Daily Affirmation
+  // Time picker writes to notificationHour/Minute, which retriggers this effect
+  // and immediately reschedules so the next fire honours the new time).
   useEffect(() => {
     if (!notificationsGranted) return;
-    scheduleDailyInsightNotification(activeDashaLord).catch((e) => {
+    scheduleDailyInsightNotification(activeDashaLord, { hour: notifHour, minute: notifMinute }).catch((e) => {
       if (__DEV__) console.warn('Notification re-schedule error (non-fatal):', e);
     });
-  }, [notificationsGranted, activeDashaLord]);
+  }, [notificationsGranted, activeDashaLord, notifHour, notifMinute]);
 
   useEffect(() => {
     return addCustomerInfoListener((info) => {

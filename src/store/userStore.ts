@@ -95,6 +95,11 @@ export interface UserProfile {
    *  iOS at 1.3x and in-app at 1.15x sees ~1.5x scale (capped at 1.5x
    *  by Text.defaultProps.maxFontSizeMultiplier to keep layouts intact). */
   fontScale: number;
+  /** Hour-of-day (0-23) at which the daily affirmation push notification
+   *  fires in the user's local timezone. Default 8 (8:00 AM). */
+  notificationHour: number;
+  /** Minute-of-hour (0-59). Default 0. */
+  notificationMinute: number;
 }
 
 export interface GuruMessage {
@@ -145,6 +150,8 @@ const defaultUser: UserProfile = {
   aiDisclosureAcknowledged: false,
   guruConsentGiven: false,
   fontScale: 1,
+  notificationHour: 8,
+  notificationMinute: 0,
 };
 
 export const useAppStore = create<AppState>()(
@@ -263,7 +270,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'nakshatra-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 5,
+      version: 6,
       migrate: (persistedState: any, version: number) => {
         let state = persistedState;
         if (version < 2 && state?.user && 'notificationsEnabled' in state.user) {
@@ -303,6 +310,18 @@ export const useAppStore = create<AppState>()(
           state = {
             ...state,
             user: { ...state.user, fontScale: state.user.fontScale ?? 1 },
+          };
+        }
+        // v6: add notificationHour/notificationMinute (default 8:00 AM
+        // local) so users can override the daily affirmation time.
+        if (version < 6 && state?.user) {
+          state = {
+            ...state,
+            user: {
+              ...state.user,
+              notificationHour: state.user.notificationHour ?? 8,
+              notificationMinute: state.user.notificationMinute ?? 0,
+            },
           };
         }
         return state;
