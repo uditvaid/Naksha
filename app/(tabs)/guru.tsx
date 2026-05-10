@@ -231,9 +231,20 @@ export default function GuruScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Guru</Text>
-            <Text style={styles.subtitle}>Your personal Vedic guide</Text>
+          <View style={styles.headerLeft}>
+            {/* Back button — visible when the user got here from another
+                screen (e.g. tapped AskGuruButton on a reading). Hidden
+                when the Guru is the user's first stop on this nav stack
+                so we don't show a misleading "back" with no destination. */}
+            {router.canGoBack() && (
+              <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+                <Text style={styles.backBtnText}>← Back</Text>
+              </TouchableOpacity>
+            )}
+            <View>
+              <Text style={styles.title}>Guru</Text>
+              <Text style={styles.subtitle}>Your personal Vedic guide</Text>
+            </View>
           </View>
           <View style={styles.headerRight}>
             {!isPremium && (
@@ -360,6 +371,9 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: any })
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.midnight },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  backBtn: { paddingVertical: 6, paddingRight: 4 },
+  backBtnText: { fontSize: 14, color: Colors.gold, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
   title: { fontSize: 20, fontFamily: Fonts.cinzel, color: Colors.gold },
   subtitle: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 2 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
