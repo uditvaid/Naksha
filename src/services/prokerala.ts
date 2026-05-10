@@ -952,16 +952,29 @@ export async function generateChart(birthData: BirthData): Promise<ChartData> {
       .catch(() => {});
   }
 
-  const yogas = yogaResult
-    ? (yogaResult.yoga_list ?? [])
-        .slice(0, 8)
-        .map((y: any) => {
-          if (typeof y === 'string') return y;
-          if (typeof y?.name === 'string') return y.name;
-          if (typeof y?.title === 'string') return y.title;
-          return null;
-        })
-        .filter((s: string | null): s is string => typeof s === 'string' && s.length > 0)
+  // Prokerala v2 returns yoga data under yoga_details[].yoga_list[].
+  // Each entry has { name, has_yoga, description }. Earlier code looked
+  // at yogaResult.yoga_list directly (wrong path) and didn't filter on
+  // has_yoga, which left the Yogas tab empty for every user. Walk the
+  // nested shape, keep only formed yogas (has_yoga: true), preserve the
+  // chart-specific description so the Yogas tab modal can show why each
+  // yoga formed for *this* chart instead of a generic blurb.
+  const yogasFromApi = (() => {
+    if (!yogaResult) return null;
+    const details = Array.isArray(yogaResult.yoga_details) ? yogaResult.yoga_details : [];
+    const formed: string[] = [];
+    for (const cat of details) {
+      const list = Array.isArray(cat?.yoga_list) ? cat.yoga_list : [];
+      for (const y of list) {
+        if (y?.has_yoga === true && typeof y?.name === 'string' && y.name.length > 0) {
+          formed.push(y.name);
+        }
+      }
+    }
+    return formed;
+  })();
+  const yogas = yogasFromApi && yogasFromApi.length > 0
+    ? yogasFromApi.slice(0, 8)
     : detectBasicYogas(planets);
 
   const navIdx = navResult ? (navResult.ascendant?.rasi?.id ?? lagnaSignIndex + 1) - 1 : lagnaSignIndex;
