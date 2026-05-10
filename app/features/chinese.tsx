@@ -633,10 +633,10 @@ const styles = StyleSheet.create({
   animalName: { fontSize: 20, fontFamily: Fonts.cinzel, color: Colors.gold },
   birthYear: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorant },
   heroRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  heroBadge: { borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4 },
-  heroBadgeText: { fontSize: 11, fontFamily: Fonts.cinzel, letterSpacing: 0.5 },
+  heroBadge: { borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 6 },
+  heroBadgeText: { fontSize: 11, lineHeight: 14, fontFamily: Fonts.cinzel, letterSpacing: 0.5, includeFontPadding: false },
   heroTraitsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  heroTraitChip: { backgroundColor: Colors.goldDim, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 3 },
+  heroTraitChip: { backgroundColor: Colors.goldDim, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 5 },
   heroTraitText: { fontSize: 11, color: Colors.star, fontFamily: Fonts.crimson, opacity: 0.85 },
 
   section: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
@@ -644,8 +644,8 @@ const styles = StyleSheet.create({
   sectionSubtitle: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 20, marginBottom: 16 },
 
   traitsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  traitChip: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 7 },
-  traitText: { fontSize: 13, color: Colors.star, fontFamily: Fonts.crimson },
+  traitChip: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 10 },
+  traitText: { fontSize: 13, lineHeight: 18, color: Colors.star, fontFamily: Fonts.crimson, includeFontPadding: false },
 
   sectionTabs: { flexDirection: 'row', marginHorizontal: Spacing.md, marginBottom: Spacing.md, backgroundColor: Colors.card, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.cardBorder, padding: 4, gap: 4 },
   sectionTab: { flex: 1, paddingVertical: 8, borderRadius: Radius.md, alignItems: 'center' },
@@ -677,7 +677,7 @@ const styles = StyleSheet.create({
   // dayMaster* styles removed — the dedicated Day Master tab was deleted;
   // its content is now surfaced via the Heavenly Stem expansion in Four Pillars.
   usefulElemsRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  usefulElemChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 6 },
+  usefulElemChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 9 },
   usefulElemChar: { fontSize: 18 },
   usefulElemText: { fontSize: 12, fontFamily: Fonts.cinzel },
 
@@ -713,8 +713,8 @@ const styles = StyleSheet.create({
   luckyLabel: { fontSize: 9, letterSpacing: 1, color: Colors.muted, fontFamily: Fonts.cinzel },
   luckyValue: { fontSize: 12, color: Colors.star, fontFamily: Fonts.cinzel, textAlign: 'center' },
   luckyColorsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  luckyColorChip: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 6 },
-  luckyColorText: { fontSize: 12, color: Colors.star, fontFamily: Fonts.crimson },
+  luckyColorChip: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 9 },
+  luckyColorText: { fontSize: 12, lineHeight: 16, color: Colors.star, fontFamily: Fonts.crimson, includeFontPadding: false },
 
   currentYearCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md },
   currentYearAnimal: { fontSize: 16, fontFamily: Fonts.cinzel, color: Colors.star, marginBottom: 8 },
