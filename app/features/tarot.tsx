@@ -10,11 +10,15 @@ import { useAppStore } from '@store/userStore';
 import { getTarotReading } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { AskGuruButton } from '@components/AskGuruButton';
-import { shuffleAndDraw, type DrawnCard, type SpreadType } from '@utils/tarot';
+import { TarotCardDetailModal, TarotBrowseModal } from '@components/TarotCardDetailModal';
+import { shuffleAndDraw, TAROT_DECK, type DrawnCard, type SpreadType, type TarotCard } from '@utils/tarot';
 
 const SPREADS: { id: SpreadType; label: string; description: string; cardCount: number }[] = [
-  { id: 'single', label: 'Single Card',      description: 'A focused message for the question at hand.', cardCount: 1 },
-  { id: 'three',  label: 'Past · Present · Future', description: 'Three cards to trace the arc of your situation.', cardCount: 3 },
+  { id: 'single',       label: 'Single Card',                description: 'A focused message for the question at hand.',                                                            cardCount: 1 },
+  { id: 'three',        label: 'Past · Present · Future',    description: 'Three cards to trace the arc of your situation.',                                                        cardCount: 3 },
+  { id: 'decision',     label: 'A vs B · The Decision',      description: 'When you\'re weighing two paths — what each leads to and what\'s underneath both.',                       cardCount: 3 },
+  { id: 'relationship', label: 'Relationship Spread',         description: 'Five cards mapping you, them, the bond between, what helps it, and what strains it.',                    cardCount: 5 },
+  { id: 'celticCross',  label: 'Celtic Cross · Deep Reading', description: 'The classic ten-card spread — the deepest reading available, for the questions that have layers.',     cardCount: 10 },
 ];
 
 export default function TarotScreen() {
@@ -27,10 +31,14 @@ export default function TarotScreen() {
   const [reading, setReading] = useState('');
   const [loading, setLoading] = useState(false);
   const [revealedIndex, setRevealedIndex] = useState(-1);
+  const [allowReversed, setAllowReversed] = useState(true);
+  const [tappedCard, setTappedCard] = useState<DrawnCard | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(false);
+  const [browsedCard, setBrowsedCard] = useState<DrawnCard | null>(null);
 
   const draw = useCallback(async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const cards = shuffleAndDraw(spread);
+    const cards = shuffleAndDraw(spread, { allowReversed });
     setDrawn(cards);
     setRevealedIndex(-1);
     setReading('');
@@ -58,7 +66,7 @@ export default function TarotScreen() {
     } finally {
       setLoading(false);
     }
-  }, [spread, question, user.birthData, user.chart, saveReading]);
+  }, [spread, question, user.birthData, user.chart, saveReading, allowReversed]);
 
   const reset = useCallback(() => {
     setDrawn(null);
@@ -143,8 +151,29 @@ export default function TarotScreen() {
                 </TouchableOpacity>
               ))}
 
+              {/* Orientation toggle — some users prefer upright-only readings */}
+              <TouchableOpacity
+                style={styles.toggleRow}
+                onPress={() => setAllowReversed(v => !v)}
+                activeOpacity={0.85}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.toggleLabel}>Allow reversed cards</Text>
+                  <Text style={styles.toggleHint}>{allowReversed ? 'Reversals add nuance to readings.' : 'Upright-only — gentler readings.'}</Text>
+                </View>
+                <View style={[styles.toggleSwitch, allowReversed && styles.toggleSwitchOn]}>
+                  <View style={[styles.toggleDot, allowReversed && styles.toggleDotOn]} />
+                </View>
+              </TouchableOpacity>
+
               <TouchableOpacity style={styles.drawBtn} onPress={draw}>
                 <Text style={styles.drawBtnText}>✦ Draw Cards</Text>
+              </TouchableOpacity>
+
+              {/* Browse the deck — learn cards outside of a reading */}
+              <TouchableOpacity style={styles.browseBtn} onPress={() => setBrowseOpen(true)} activeOpacity={0.85}>
+                <Text style={styles.browseBtnText}>📖 Browse the Deck</Text>
+                <Text style={styles.browseBtnSub}>Learn all 78 cards in plain English</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -155,13 +184,17 @@ export default function TarotScreen() {
               <View style={styles.cardsRow}>
                 {drawn.map((d, i) => (
                   <View key={i} style={styles.cardSlot}>
-                    <Text style={styles.positionLabel}>{d.position.toUpperCase()}</Text>
+                    <Text style={styles.positionLabel} numberOfLines={2}>{d.position.toUpperCase()}</Text>
                     {i <= revealedIndex ? (
-                      <View style={[styles.cardFace, d.reversed && styles.cardFaceReversed]}>
+                      <TouchableOpacity
+                        style={[styles.cardFace, d.reversed && styles.cardFaceReversed]}
+                        onPress={() => setTappedCard(d)}
+                        activeOpacity={0.85}
+                      >
                         <Text style={styles.cardSymbol}>{d.card.symbol}</Text>
-                        <Text style={styles.cardName}>{d.card.name}</Text>
+                        <Text style={styles.cardName} numberOfLines={2}>{d.card.name}</Text>
                         {d.reversed && <Text style={styles.reversedBadge}>↓ reversed</Text>}
-                      </View>
+                      </TouchableOpacity>
                     ) : (
                       <View style={styles.cardBack}>
                         <Text style={styles.cardBackGlyph}>✦</Text>
@@ -170,6 +203,9 @@ export default function TarotScreen() {
                   </View>
                 ))}
               </View>
+              {revealedIndex >= drawn.length - 1 && (
+                <Text style={styles.tapCardsHint}>Tap any card above for plain-English meaning →</Text>
+              )}
 
               {/* Card meanings (raw, before AI synthesis) */}
               {revealedIndex >= drawn.length - 1 && (
@@ -210,6 +246,32 @@ export default function TarotScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Tap any drawn card → rich plain-English detail. Same modal is
+          used by browse-the-deck below; the only difference is the
+          position label (drawn cards have one, browse cards don't). */}
+      <TarotCardDetailModal
+        drawn={tappedCard}
+        onClose={() => setTappedCard(null)}
+      />
+
+      {/* Browse the entire 78-card deck. Tapping any card opens the
+          same detail modal in upright orientation by default — users
+          learning the deck don't need reversed nuance up front. */}
+      <TarotBrowseModal
+        visible={browseOpen}
+        onClose={() => setBrowseOpen(false)}
+        onSelect={(card: TarotCard) => {
+          setBrowseOpen(false);
+          // Brief delay so the close animation finishes before the
+          // detail modal slides up — feels less jarring.
+          setTimeout(() => setBrowsedCard({ card, reversed: false, position: 'About this card' }), 250);
+        }}
+      />
+      <TarotCardDetailModal
+        drawn={browsedCard}
+        onClose={() => setBrowsedCard(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -264,6 +326,23 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   drawBtnText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5 },
+
+  // Orientation toggle
+  toggleRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md, marginTop: Spacing.md, gap: 12 },
+  toggleLabel: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star, letterSpacing: 0.3 },
+  toggleHint: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 2 },
+  toggleSwitch: { width: 42, height: 24, borderRadius: 12, backgroundColor: Colors.cardBorder, justifyContent: 'center', paddingHorizontal: 2 },
+  toggleSwitchOn: { backgroundColor: Colors.gold },
+  toggleDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.muted, alignSelf: 'flex-start' },
+  toggleDotOn: { backgroundColor: Colors.midnight, alignSelf: 'flex-end' },
+
+  // Browse the deck button
+  browseBtn: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, padding: Spacing.md, alignItems: 'center', marginTop: 10, gap: 4 },
+  browseBtnText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 0.3 },
+  browseBtnSub: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic },
+
+  // Tap-cards hint
+  tapCardsHint: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cormorantItalic, opacity: 0.85, textAlign: 'center', marginTop: -4, marginBottom: Spacing.sm, letterSpacing: 0.3 },
 
   // Cards
   cardsSection: { paddingHorizontal: Spacing.md },

@@ -9,7 +9,7 @@
 
 export type Arcana = 'major' | 'minor';
 export type Suit = 'wands' | 'cups' | 'swords' | 'pentacles';
-export type SpreadType = 'single' | 'three';
+export type SpreadType = 'single' | 'three' | 'relationship' | 'decision' | 'celticCross';
 
 export interface TarotCard {
   id: number;
@@ -281,10 +281,35 @@ function hashStringToSeed(s: string): number {
 const SPREAD_POSITIONS: Record<SpreadType, string[]> = {
   single: ['The Card'],
   three:  ['Past', 'Present', 'Future'],
+  // 5-card relationship spread — focused on a single connection
+  relationship: ['You', 'Them', 'The Bond', 'What Helps', 'What Strains'],
+  // 3-card decision spread — A vs B + the deeper truth underneath
+  decision: ['If You Choose A', 'If You Choose B', 'Underneath Both'],
+  // Classic 10-card Celtic Cross — the deepest reading available
+  celticCross: [
+    'The Heart of the Matter',
+    'What Crosses You',
+    'The Foundation',
+    'The Recent Past',
+    'What\'s Possible',
+    'The Near Future',
+    'How You See Yourself',
+    'How Others See You',
+    'Your Hopes & Fears',
+    'The Outcome',
+  ],
 };
 
 export function getSpreadPositions(spread: SpreadType): string[] {
   return SPREAD_POSITIONS[spread];
+}
+
+export interface DrawOptions {
+  /** Optional deterministic seed (e.g. user+date for daily card). */
+  seed?: string;
+  /** Whether reversed (upside-down) cards are allowed in this draw. Some
+   *  users prefer upright-only readings; default true honours both. */
+  allowReversed?: boolean;
 }
 
 /**
@@ -292,9 +317,12 @@ export function getSpreadPositions(spread: SpreadType): string[] {
  * With a seed, results are deterministic — useful for tests and for
  * "draw of the day" where the seed is the date.
  */
-export function shuffleAndDraw(spread: SpreadType, seed?: string): DrawnCard[] {
-  const rand = seed != null ? mulberry32(hashStringToSeed(seed)) : Math.random;
+export function shuffleAndDraw(spread: SpreadType, opts: DrawOptions | string = {}): DrawnCard[] {
+  // Backwards-compat: callers used to pass `seed` directly as a string.
+  const o: DrawOptions = typeof opts === 'string' ? { seed: opts } : opts;
+  const rand = o.seed != null ? mulberry32(hashStringToSeed(o.seed)) : Math.random;
   const positions = SPREAD_POSITIONS[spread];
+  const allowReversed = o.allowReversed !== false;
 
   // Fisher-Yates on a copy of the deck.
   const deck = TAROT_DECK.slice();
@@ -305,7 +333,8 @@ export function shuffleAndDraw(spread: SpreadType, seed?: string): DrawnCard[] {
 
   return positions.map((position, i) => ({
     card: deck[i]!,
-    reversed: rand() < 0.4, // ~40% reversed feels right; pure 50% leaves too many reversals
+    // ~40% reversed when reversals are allowed; pure 50% leaves too many reversals
+    reversed: allowReversed ? rand() < 0.4 : false,
     position,
   }));
 }
