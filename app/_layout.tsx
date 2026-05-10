@@ -7,6 +7,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initRevenueCat, getCustomerInfo, isPremiumActive, addCustomerInfoListener } from '../src/services/revenuecat';
 import { requestNotificationPermissions, setupAndroidChannel, scheduleDailyInsightNotification } from '../src/services/notifications';
 import { useAppStore } from '../src/store/userStore';
+// Side-effect import: patches Text.render at module load to honour the
+// in-app font-scale preference. Cap iOS Dynamic Type at 1.5x. Must
+// import once at app boot so every Text in the tree picks up the patch.
+import '../src/services/textScale';
 import { findActiveDasha } from '../src/utils/vedic';
 
 SplashScreen.preventAutoHideAsync();
@@ -14,6 +18,12 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const setPremium = useAppStore(s => s.setPremium);
   const dashas = useAppStore(s => s.user.chart?.dashas);
+  // Subscribe to fontScale and key the Stack on it so that changing the
+  // in-app font size in Profile triggers a full-tree re-render. The
+  // Text.render patch reads the latest scale via getState() inside
+  // render, so existing components only pick up the new size after a
+  // re-render — keying the root makes that happen instantly.
+  const fontScale = useAppStore(s => s.user.fontScale ?? 1);
   // Derive active dasha at read time so the daily-insight notification reschedules
   // when the user crosses a mahadasha boundary even without regenerating the chart.
   const activeDashaLord = findActiveDasha(dashas)?.planet;
@@ -92,6 +102,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#080B14' }}>
       <StatusBar style="light" />
       <Stack
+        key={`scale-${fontScale}`}
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: '#080B14' },

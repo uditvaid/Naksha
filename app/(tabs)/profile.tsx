@@ -7,6 +7,7 @@ import { useAppStore } from '@store/userStore';
 import { restorePurchases, isPremiumActive } from '@services/revenuecat';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { TEST_MODE, BUILD_PROFILE, PROXY_BASE_URL, REVENUECAT_IOS_KEY } from '@constants/config';
+import { fontScaleValue, fontScaleOption, type FontScaleOption } from '@services/textScale';
 import { getDailyReading } from '@services/claude';
 import { generateChart } from '@services/prokerala';
 import { findActiveDasha } from '@utils/vedic';
@@ -17,7 +18,9 @@ export default function ProfileScreen() {
   const user = useAppStore(s => s.user);
   const setPremium = useAppStore(s => s.setPremium);
   const setChart = useAppStore(s => s.setChart);
+  const setUser = useAppStore(s => s.setUser);
   const reset = useAppStore(s => s.reset);
+  const currentFontOption: FontScaleOption = fontScaleOption(user.fontScale ?? 1);
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
@@ -178,6 +181,32 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Display — text size override on top of iOS Dynamic Type. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>DISPLAY</Text>
+          <Text style={styles.fontScaleHint}>
+            Text size in the app. iOS system Larger Text (Settings → Accessibility → Display & Text Size) is also respected on top of this.
+          </Text>
+          <View style={styles.fontScaleRow}>
+            {(['default', 'large', 'xlarge'] as FontScaleOption[]).map((opt) => {
+              const active = currentFontOption === opt;
+              const label = opt === 'default' ? 'Default' : opt === 'large' ? 'Large' : 'Extra Large';
+              const sample = opt === 'default' ? 14 : opt === 'large' ? 16 : 18;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={[styles.fontScaleBtn, active && styles.fontScaleBtnActive]}
+                  onPress={() => setUser({ fontScale: fontScaleValue(opt) })}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.fontScaleSample, { fontSize: sample }, active && styles.fontScaleSampleActive]}>Aa</Text>
+                  <Text style={[styles.fontScaleLabel, active && styles.fontScaleLabelActive]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {TEST_MODE && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>⚠ TESTING · {BUILD_PROFILE.toUpperCase()} BUILD</Text>
@@ -298,6 +327,14 @@ const styles = StyleSheet.create({
   upgradeTagText: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },
   section: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
   sectionTitle: { fontSize: 10, letterSpacing: 2, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 10 },
+  fontScaleHint: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 18, marginBottom: 12 },
+  fontScaleRow: { flexDirection: 'row', gap: 10 },
+  fontScaleBtn: { flex: 1, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, paddingVertical: 14, alignItems: 'center', gap: 4 },
+  fontScaleBtnActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
+  fontScaleSample: { color: Colors.star, fontFamily: Fonts.cinzel },
+  fontScaleSampleActive: { color: Colors.gold },
+  fontScaleLabel: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cinzel, letterSpacing: 0.5 },
+  fontScaleLabelActive: { color: Colors.gold },
   detailsCard: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, overflow: 'hidden' },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14 },
   detailRowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },

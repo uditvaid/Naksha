@@ -90,6 +90,11 @@ export interface UserProfile {
   preferredSystem: 'vedic' | 'western';
   aiDisclosureAcknowledged: boolean;
   guruConsentGiven: boolean;
+  /** User-controlled in-app font scale (1.0 = default, 1.15 = large,
+   *  1.3 = extra large). Compounds with iOS Dynamic Type — a user with
+   *  iOS at 1.3x and in-app at 1.15x sees ~1.5x scale (capped at 1.5x
+   *  by Text.defaultProps.maxFontSizeMultiplier to keep layouts intact). */
+  fontScale: number;
 }
 
 export interface GuruMessage {
@@ -139,6 +144,7 @@ const defaultUser: UserProfile = {
   preferredSystem: 'vedic',
   aiDisclosureAcknowledged: false,
   guruConsentGiven: false,
+  fontScale: 1,
 };
 
 export const useAppStore = create<AppState>()(
@@ -257,7 +263,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'nakshatra-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4,
+      version: 5,
       migrate: (persistedState: any, version: number) => {
         let state = persistedState;
         if (version < 2 && state?.user && 'notificationsEnabled' in state.user) {
@@ -291,6 +297,13 @@ export const useAppStore = create<AppState>()(
             };
           });
           state = { ...state, user: { ...state.user, chart: { ...state.user.chart, dashas: stripped } } };
+        }
+        // v5: add fontScale field (default 1 = no in-app override).
+        if (version < 5 && state?.user) {
+          state = {
+            ...state,
+            user: { ...state.user, fontScale: state.user.fontScale ?? 1 },
+          };
         }
         return state;
       },
