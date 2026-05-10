@@ -677,7 +677,17 @@ export default function ChartScreen() {
                   <TouchableOpacity
                     key={dasha.planet + dasha.startDate}
                     style={[styles.dashaCard, isActive && styles.dashaCardActive, isPast && styles.dashaCardPast]}
-                    onPress={() => setSelectedDashaPlanet(dasha.planet)}
+                    onPress={() => {
+                      // Past + current chapters are free for everyone — they're
+                      // about lived experience and present awareness. Future
+                      // chapters are gated to Premium because they're predictive
+                      // and require a fuller commitment to the practice.
+                      if (locked) {
+                        router.push('/paywall');
+                        return;
+                      }
+                      setSelectedDashaPlanet(dasha.planet);
+                    }}
                     activeOpacity={0.75}
                   >
                     <View style={styles.dashaHeader}>
@@ -707,7 +717,7 @@ export default function ChartScreen() {
                       </View>
                       <View style={styles.dashaRight}>
                         {locked ? (
-                          <Text style={styles.lockIcon}>✦</Text>
+                          <Text style={styles.lockHint}>✦ Premium</Text>
                         ) : (
                           <Text style={styles.tapHint}>Tap →</Text>
                         )}
@@ -1072,6 +1082,7 @@ const styles = StyleSheet.create({
   // Shared
   tapHint: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel },
   lockIcon: { fontSize: 10, color: Colors.gold, fontFamily: Fonts.cinzel },
+  lockHint: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cinzel, opacity: 0.85, letterSpacing: 0.5 },
 
   // Lagna card tap hint
   lagnaHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
