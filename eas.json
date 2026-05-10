@@ -40,6 +40,13 @@
         "ascAppId": "6761780245",
         "appleTeamId": "P7Y9F7LD59"
       }
+    },
+    "testflight": {
+      "ios": {
+        "appleId": "udit.vaid04@gmail.com",
+        "ascAppId": "6761780245",
+        "appleTeamId": "P7Y9F7LD59"
+      }
     }
   }
 }
