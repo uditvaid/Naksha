@@ -47,10 +47,19 @@ TextAny.defaultProps.maxFontSizeMultiplier = 1.5;
 // reading save. The early-out below makes the no-op case cost nothing
 // beyond a property read + comparison.
 let _currentScale = useAppStore.getState().user.fontScale ?? 1;
-useAppStore.subscribe((state) => {
-  const next = state.user.fontScale ?? 1;
-  if (next !== _currentScale) _currentScale = next;
-});
+// Guard against re-subscribing on hot reload in dev — without this,
+// every fast-refresh re-evaluates this module and adds another listener,
+// so after a few iterations the same scale-update fires N times per
+// store change. Production isn't affected (no fast refresh) but dev
+// gets quietly noisier.
+const _storeAny = useAppStore as unknown as { __naksha_textScale_subscribed?: boolean };
+if (!_storeAny.__naksha_textScale_subscribed) {
+  _storeAny.__naksha_textScale_subscribed = true;
+  useAppStore.subscribe((state) => {
+    const next = state.user.fontScale ?? 1;
+    if (next !== _currentScale) _currentScale = next;
+  });
+}
 
 // Patch Text.render exactly once. The flag is checked + set in the same
 // tick to defend against double-imports on hot reload (which would

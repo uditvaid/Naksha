@@ -125,8 +125,11 @@ function buildSystemPrompt(
   const persona = precomputedPersona !== undefined
     ? precomputedPersona
     : (chart ? deriveUserPersona(chart) : null);
+  // buildDynamicGuruPrompt's signature is `UserPersona & { moonNakshatraNote?: string }`.
+  // Since moonNakshatraNote is optional, plain UserPersona satisfies it
+  // structurally — the previous `as any` cast was unnecessary type laundering.
   const guruSystem = persona
-    ? buildDynamicGuruPrompt(persona as any)
+    ? buildDynamicGuruPrompt(persona)
     : defaultGuruSystem();
 
   const chartSection = chart ? `
