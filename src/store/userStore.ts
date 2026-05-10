@@ -149,7 +149,10 @@ const defaultUser: UserProfile = {
   preferredSystem: 'vedic',
   aiDisclosureAcknowledged: false,
   guruConsentGiven: false,
-  fontScale: 1,
+  // Default to Large (1.15) — fresh installs get the more readable size
+  // out of the box. Users who prefer smaller text can drop to Default
+  // (1.0) in Profile → Display.
+  fontScale: 1.15,
   notificationHour: 8,
   notificationMinute: 0,
 };
@@ -270,7 +273,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'nakshatra-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 6,
+      version: 7,
       migrate: (persistedState: any, version: number) => {
         let state = persistedState;
         if (version < 2 && state?.user && 'notificationsEnabled' in state.user) {
@@ -323,6 +326,14 @@ export const useAppStore = create<AppState>()(
               notificationMinute: state.user.notificationMinute ?? 0,
             },
           };
+        }
+        // v7: bump default font scale to 1.15 (Large). Only auto-upgrade
+        // users still on the v6 default of 1.0 — anyone who explicitly
+        // chose a non-default value (Large=1.15 or Extra Large=1.3) keeps
+        // their preference. The check `=== 1` is sufficient because
+        // Large/XL are 1.15/1.3.
+        if (version < 7 && state?.user && state.user.fontScale === 1) {
+          state = { ...state, user: { ...state.user, fontScale: 1.15 } };
         }
         return state;
       },
