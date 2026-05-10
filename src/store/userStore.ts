@@ -18,6 +18,12 @@ export interface BirthData {
   latitude: number;
   longitude: number;
   timezone: string;
+  /** True when timeOfBirth is a midpoint approximation (user picked a
+   *  window like "morning 5-9 AM" rather than an exact time). The chart
+   *  will surface this as an "approximate" badge and degrade Lagna
+   *  confidence accordingly. Optional for backwards-compat with users
+   *  who entered an exact time before this field existed. */
+  isTimeApproximate?: boolean;
 }
 
 export interface ChartData {

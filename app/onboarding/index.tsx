@@ -259,6 +259,10 @@ export default function OnboardingScreen() {
           name: name.trim(),
           dateOfBirth: formatDateISO(selectedDate),
           timeOfBirth: selectedTime ? formatTime(selectedTime) : '12:00',
+          // Mark the chart as time-approximate when the user picked a
+          // window instead of an exact time. Used to surface an
+          // "approximate" badge on the Chart screen.
+          isTimeApproximate: timeUnknown,
           placeOfBirth: place.trim(),
           latitude: geo.latitude,
           longitude: geo.longitude,
@@ -444,7 +448,9 @@ export default function OnboardingScreen() {
           >
             <Text style={styles.dateDisplayLabel}>TIME OF BIRTH</Text>
             <Text style={[styles.dateDisplayValue, !selectedTime && { color: Colors.muted }]}>
-              {timeUnknown ? 'Unknown (using noon)' : selectedTime ? formatTimeDisplay(selectedTime) : 'Tap to select'}
+              {timeUnknown
+                ? selectedTime ? `${formatTimeDisplay(selectedTime)} (approx.)` : 'Pick a window below'
+                : selectedTime ? formatTimeDisplay(selectedTime) : 'Tap to select'}
             </Text>
             <Text style={styles.dateDisplayIcon}>🕐</Text>
           </TouchableOpacity>
@@ -481,16 +487,62 @@ export default function OnboardingScreen() {
                 onPress={() => {
                   setTimeUnknown(!timeUnknown);
                   setShowTimePicker(false);
+                  // When toggling OFF, clear any window-midpoint selection
+                  // so the user falls back to the precise time picker.
+                  if (timeUnknown) setSelectedTime(null);
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 }}
               >
                 <Text style={[styles.unknownTimeBtnText, timeUnknown && { color: Colors.gold }]}>
-                  {timeUnknown ? '✓ Time unknown — using noon' : 'I don\'t know my birth time'}
+                  {timeUnknown ? '✓ Using a time window' : 'I don\'t know my exact birth time'}
                 </Text>
               </TouchableOpacity>
-              <Text style={styles.timeWarning}>
-                Your rising sign (Lagna) can shift with as little as a 4-minute error. Check your birth certificate or hospital records for precision.
-              </Text>
+
+              {/* Time-window picker — when the user doesn't know their
+                  exact time, give them 6 four-hour windows. Each maps
+                  to a midpoint hour the chart can use; the chart will
+                  show an "approximate" badge so users know the
+                  limitation. Six buckets is a balance between accuracy
+                  (each spans 2 BaZi Hour Pillars) and UX simplicity. */}
+              {timeUnknown && (
+                <>
+                  <Text style={styles.timeWindowHint}>
+                    Pick the closest window. The chart will be marked "approximate" — your Rising Sign and Hour Pillar may be off, but everything else stays useful.
+                  </Text>
+                  <View style={styles.timeWindowGrid}>
+                    {([
+                      { label: 'Late night',     range: '11 PM – 3 AM',   hour: 1 },
+                      { label: 'Pre-dawn',       range: '3 – 7 AM',       hour: 5 },
+                      { label: 'Mid morning',    range: '7 – 11 AM',      hour: 9 },
+                      { label: 'Around midday',  range: '11 AM – 3 PM',   hour: 13 },
+                      { label: 'Afternoon',      range: '3 – 7 PM',       hour: 17 },
+                      { label: 'Evening',        range: '7 – 11 PM',      hour: 21 },
+                    ] as const).map((w) => {
+                      const isActive = selectedTime?.getHours() === w.hour && selectedTime?.getMinutes() === 0;
+                      return (
+                        <TouchableOpacity
+                          key={w.label}
+                          style={[styles.timeWindowBtn, isActive && styles.timeWindowBtnActive]}
+                          onPress={() => {
+                            const d = new Date(2000, 0, 1, w.hour, 0, 0);
+                            setSelectedTime(d);
+                            Haptics.selectionAsync();
+                          }}
+                        >
+                          <Text style={[styles.timeWindowBtnLabel, isActive && { color: Colors.gold }]}>{w.label}</Text>
+                          <Text style={[styles.timeWindowBtnRange, isActive && { color: Colors.gold + 'cc' }]}>{w.range}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+
+              {!timeUnknown && (
+                <Text style={styles.timeWarning}>
+                  Your rising sign (Lagna) can shift with as little as a 4-minute error. Check your birth certificate or hospital records for precision.
+                </Text>
+              )}
             </>
           )}
         </View>
@@ -582,10 +634,10 @@ export default function OnboardingScreen() {
 
           {step === 3 && (
             <TouchableOpacity
-              onPress={() => { setTimeUnknown(true); setShowTimePicker(false); handleNext(); }}
+              onPress={() => { setTimeUnknown(true); setSelectedTime(null); setShowTimePicker(false); handleNext(); }}
               style={styles.skipBtn}
             >
-              <Text style={styles.skipBtnText}>Skip — I'll use noon ↓</Text>
+              <Text style={styles.skipBtnText}>Skip — I genuinely don't know ↓</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -661,6 +713,14 @@ const styles = StyleSheet.create({
   unknownTimeBtnActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
   unknownTimeBtnText: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cinzel },
   timeWarning: { fontSize: 11, color: Colors.mutedDark, fontFamily: Fonts.cormorantItalic, lineHeight: 17, marginTop: 12 },
+
+  // 6-window picker for users who don't know their exact time
+  timeWindowHint: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 18, marginTop: 12, marginBottom: 8 },
+  timeWindowGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  timeWindowBtn: { width: '48%', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.md, padding: 12, alignItems: 'center', gap: 2 },
+  timeWindowBtnActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
+  timeWindowBtnLabel: { fontSize: 13, color: Colors.star, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
+  timeWindowBtnRange: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic },
 
   // Generating
   generatingContent: { alignItems: 'center', gap: 12 },

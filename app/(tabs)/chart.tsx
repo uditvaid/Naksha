@@ -638,6 +638,19 @@ export default function ChartScreen() {
                 {!user.chart.isApproximate && (
                   <Text style={styles.methodologyBadge}>Swiss Ephemeris · Lahiri Ayanamsha · Whole Sign Houses</Text>
                 )}
+                {/* Approximate-time indicator — surfaces when the user
+                    chose a time window or skipped time entry. The
+                    Lagna and Hour Pillar are most affected; everything
+                    else (Sun sign, dasha, planet positions) stays
+                    largely accurate. */}
+                {user.birthData?.isTimeApproximate && (
+                  <View style={styles.timeApproxBanner}>
+                    <Text style={styles.timeApproxBannerTitle}>⏱ Approximate time</Text>
+                    <Text style={styles.timeApproxBannerText}>
+                      You picked a time window rather than an exact birth time. Your Rising Sign and Hour Pillar may be off; everything else (Sun sign, planets, dashas) is still reliable. Update your time in Profile if you find your birth certificate.
+                    </Text>
+                  </View>
+                )}
                 {/* Approx-mode retry CTA lives in the global banner above the
                     tab bar (visible across all tabs). The inner duplicate that
                     used to render here was removed. */}
@@ -1024,6 +1037,9 @@ const styles = StyleSheet.create({
   setupBtn: { backgroundColor: Colors.gold, borderRadius: Radius.lg, paddingHorizontal: 24, paddingVertical: 12 },
   setupBtnText: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.midnight },
   methodologyBadge: { fontSize: 10, color: Colors.mutedDark, fontFamily: Fonts.cormorantItalic, textAlign: 'center', marginTop: 8, letterSpacing: 0.5 },
+  timeApproxBanner: { backgroundColor: Colors.amber + '15', borderWidth: 1, borderColor: Colors.amber + '50', borderRadius: Radius.md, padding: Spacing.md, marginTop: 12, gap: 4 },
+  timeApproxBannerTitle: { fontSize: 12, color: Colors.amber, fontFamily: Fonts.cinzel, letterSpacing: 0.5 },
+  timeApproxBannerText: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 18 },
   approxBanner: { backgroundColor: Colors.goldDim, borderBottomWidth: 1, borderBottomColor: Colors.gold, paddingVertical: 8, paddingHorizontal: Spacing.md },
   approxBannerText: { fontSize: 12, lineHeight: 18, color: Colors.amber, fontFamily: Fonts.cormorantItalic, textAlign: 'center' },
 
