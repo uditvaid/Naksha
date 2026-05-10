@@ -292,7 +292,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'nakshatra-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 7,
+      version: 8,
       migrate: (persistedState: any, version: number) => {
         let state = persistedState;
         if (version < 2 && state?.user && 'notificationsEnabled' in state.user) {
@@ -353,6 +353,19 @@ export const useAppStore = create<AppState>()(
         // Large/XL are 1.15/1.3.
         if (version < 7 && state?.user && state.user.fontScale === 1) {
           state = { ...state, user: { ...state.user, fontScale: 1.15 } };
+        }
+        // v8: backfill fontScaleExplicit for users whose current value
+        // is *unambiguously* an explicit choice. The v6→v7 force-upgrade
+        // moved 1.0 → 1.15, so any user currently at 1.0 (post-migration
+        // Default pick) or 1.3 (Extra Large was never a default) must
+        // have picked it via the UI. Users at 1.15 are ambiguous — could
+        // be force-upgraded or explicit Large — left unmarked.
+        if (version < 8 && state?.user) {
+          const fs = state.user.fontScale;
+          const isUnambiguouslyExplicit = fs === 1 || fs === 1.3;
+          if (isUnambiguouslyExplicit && state.user.fontScaleExplicit !== true) {
+            state = { ...state, user: { ...state.user, fontScaleExplicit: true } };
+          }
         }
         return state;
       },
