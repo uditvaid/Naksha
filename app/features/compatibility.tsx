@@ -591,7 +591,15 @@ export default function CompatibilityScreen() {
               )}
               <Text style={styles.readingText}>{reading}</Text>
 
-              <AskGuruButton seed={`I just read a compatibility reading between me and ${partnerName.trim() || 'my partner'}. Help me understand `} />
+              <AskGuruButton
+                // Sanitize partnerName before interpolating into the seed:
+                // strip newlines / repeated whitespace and cap length so a
+                // pasted name with embedded `>>> ignore previous instructions`
+                // type tokens can't restructure the prompt the user sees
+                // in the Guru input. The user reviews the input before
+                // sending anyway, but a clean seed reads better.
+                seed={`I just read a compatibility reading between me and ${(partnerName.trim().replace(/\s+/g, ' ').slice(0, 60)) || 'my partner'}. Help me understand `}
+              />
 
               {/* New reading */}
               <TouchableOpacity

@@ -243,15 +243,25 @@ export interface DayMasterRelationDetail {
   tone: 'gold' | 'emerald' | 'amber' | 'star' | 'muted';
 }
 
-export function relationToDayMaster(element: string, dayMasterElement: string): DayMasterRelation {
+export function relationToDayMaster(element: string, dayMasterElement: string): DayMasterRelation | null {
   if (element === dayMasterElement) return 'self';
   const dm = ELEMENT_DEEP[dayMasterElement];
-  if (!dm) return 'self';
+  if (!dm) {
+    // Unknown element name — return null rather than silently defaulting
+    // to 'self' (which would render misleading "same as your Day Master"
+    // copy). Callers should treat null as "no relationship section".
+    if (__DEV__) console.warn(`[baziDetails] Unknown Day Master element: ${dayMasterElement}`);
+    return null;
+  }
   if (dm.generatedBy === element) return 'supports';   // element feeds Day Master
   if (dm.generates === element) return 'drains';       // Day Master feeds this element (output)
   if (dm.controlledBy === element) return 'controls';  // element controls Day Master (pressure)
   if (dm.controls === element) return 'controlledBy';  // Day Master controls this element (wealth/output)
-  return 'self';
+  // Defensive: every recognised element pair should map to one of the
+  // four branches above. If we get here, ELEMENT_DEEP is internally
+  // inconsistent — log and return null.
+  if (__DEV__) console.warn(`[baziDetails] Unmappable element pair: ${element} / ${dayMasterElement}`);
+  return null;
 }
 
 export function dayMasterRelationDetail(
@@ -260,6 +270,7 @@ export function dayMasterRelationDetail(
 ): DayMasterRelationDetail | null {
   if (!ELEMENT_DEEP[element] || !ELEMENT_DEEP[dayMasterElement]) return null;
   const rel = relationToDayMaster(element, dayMasterElement);
+  if (rel === null) return null;
   switch (rel) {
     case 'self':
       return {

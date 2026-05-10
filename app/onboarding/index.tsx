@@ -167,30 +167,50 @@ export default function OnboardingScreen() {
   const setOnboardingComplete = useAppStore(s => s.setOnboardingComplete);
   const setBirthData = useAppStore(s => s.setBirthData);
   const setChart = useAppStore(s => s.setChart);
+  // Pre-existing birth data — if the user reached onboarding by tapping
+  // "Edit Birth Data" from Profile, prefill the form so they don't have
+  // to re-enter every field. Read once at mount via useRef so subsequent
+  // state changes during onboarding don't clobber what the user is
+  // currently typing.
+  const existingBirthData = useAppStore.getState().user.birthData;
+  const initRef = useRef(existingBirthData);
 
   const [step, setStep] = useState(0);
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
-  const [name, setName] = useState('');
-  const [place, setPlace] = useState('');
+  const [ageConfirmed, setAgeConfirmed] = useState(!!initRef.current);
+  const [name, setName] = useState(initRef.current?.name ?? '');
+  const [place, setPlace] = useState(initRef.current?.placeOfBirth ?? '');
   const [generating, setGenerating] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // Date picker state
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(1990, 0, 1));
+  const initDate = initRef.current?.dateOfBirth ? new Date(initRef.current.dateOfBirth + 'T00:00:00') : null;
+  const [selectedDate, setSelectedDate] = useState<Date>(initDate ?? new Date(1990, 0, 1));
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateConfirmed, setDateConfirmed] = useState(false);
+  const [dateConfirmed, setDateConfirmed] = useState(!!initDate);
 
   // Time picker state
-  const [selectedTime, setSelectedTime] = useState<Date | null>(null);
+  const initTime = (() => {
+    if (!initRef.current?.timeOfBirth) return null;
+    const [h, m] = initRef.current.timeOfBirth.split(':').map(Number);
+    if (h == null || m == null || Number.isNaN(h) || Number.isNaN(m)) return null;
+    return new Date(2000, 0, 1, h, m, 0);
+  })();
+  const [selectedTime, setSelectedTime] = useState<Date | null>(initTime);
   // pickerTime holds the spinner's in-flight value; only copied to selectedTime on Confirm.
   // This prevents the iOS spinner's spurious onChange-on-mount from silently overwriting
   // selectedTime with the device's current clock before the user has touched anything.
-  const [pickerTime, setPickerTime] = useState<Date>(new Date(2000, 0, 1, 12, 0));
+  const [pickerTime, setPickerTime] = useState<Date>(initTime ?? new Date(2000, 0, 1, 12, 0));
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [timeUnknown, setTimeUnknown] = useState(false);
+  const [timeUnknown, setTimeUnknown] = useState(!!initRef.current?.isTimeApproximate);
 
-  const [geocodeResult, setGeocodeResult] = useState<GeoResult | null>(null);
-  const [geocodeStatus, setGeocodeStatus] = useState<'idle' | 'loading' | 'found' | 'error'>('idle');
+  // Pre-populate geocode from existing birth data so users editing
+  // don't have to re-geocode the same place. Marked 'found' so the
+  // Continue button on step 4 doesn't block.
+  const initGeocode: GeoResult | null = initRef.current
+    ? { latitude: initRef.current.latitude, longitude: initRef.current.longitude, timezone: initRef.current.timezone }
+    : null;
+  const [geocodeResult, setGeocodeResult] = useState<GeoResult | null>(initGeocode);
+  const [geocodeStatus, setGeocodeStatus] = useState<'idle' | 'loading' | 'found' | 'error'>(initGeocode ? 'found' : 'idle');
   const geocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const geocodeRequestTokenRef = useRef(0);
 
@@ -503,7 +523,11 @@ export default function OnboardingScreen() {
                   to a midpoint hour the chart can use; the chart will
                   show an "approximate" badge so users know the
                   limitation. Six buckets is a balance between accuracy
-                  (each spans 2 BaZi Hour Pillars) and UX simplicity. */}
+                  (each spans 2 BaZi Hour Pillars) and UX simplicity.
+                  Midpoints chosen to land at the centre of a single
+                  BaZi Hour Pillar — e.g., 8 AM is inside Dragon (7-9)
+                  rather than 9 AM which sits on the Dragon/Snake
+                  boundary. */}
               {timeUnknown && (
                 <>
                   <Text style={styles.timeWindowHint}>
@@ -511,12 +535,12 @@ export default function OnboardingScreen() {
                   </Text>
                   <View style={styles.timeWindowGrid}>
                     {([
-                      { label: 'Late night',     range: '11 PM – 3 AM',   hour: 1 },
-                      { label: 'Pre-dawn',       range: '3 – 7 AM',       hour: 5 },
-                      { label: 'Mid morning',    range: '7 – 11 AM',      hour: 9 },
-                      { label: 'Around midday',  range: '11 AM – 3 PM',   hour: 13 },
-                      { label: 'Afternoon',      range: '3 – 7 PM',       hour: 17 },
-                      { label: 'Evening',        range: '7 – 11 PM',      hour: 21 },
+                      { label: 'Late night',     range: '11 PM – 3 AM',   hour: 0 },   // Rat pillar centre
+                      { label: 'Pre-dawn',       range: '3 – 7 AM',       hour: 4 },   // Tiger pillar centre
+                      { label: 'Mid morning',    range: '7 – 11 AM',      hour: 8 },   // Dragon pillar centre
+                      { label: 'Around midday',  range: '11 AM – 3 PM',   hour: 12 },  // Horse pillar centre
+                      { label: 'Afternoon',      range: '3 – 7 PM',       hour: 16 },  // Monkey pillar centre
+                      { label: 'Evening',        range: '7 – 11 PM',      hour: 20 },  // Dog pillar centre
                     ] as const).map((w) => {
                       const isActive = selectedTime?.getHours() === w.hour && selectedTime?.getMinutes() === 0;
                       return (
