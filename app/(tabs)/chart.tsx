@@ -744,6 +744,12 @@ export default function ChartScreen() {
             <Text style={styles.sectionSubtitle}>
               Yogas are special planetary combinations that create distinct patterns in your life. Tap any yoga to learn what it means for you.
             </Text>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoTitle}>What are yogas?</Text>
+              <Text style={styles.infoText}>
+                Yogas are powerful planetary combinations — like a special chord in music. When specific planets align in particular ways in your chart, they create amplified results in certain areas of life: wealth, intelligence, fame, spiritual growth, or relationship success. Some yogas make you particularly gifted in specific areas. Others bring challenges that, when worked through, become your greatest strengths.
+              </Text>
+            </View>
             {yogas.length === 0 ? (
               <Text style={styles.emptyText}>Your yogas will appear once your chart is generated.</Text>
             ) : (
@@ -765,12 +771,6 @@ export default function ChartScreen() {
                 </TouchableOpacity>
               ))
             )}
-            <View style={styles.infoCard}>
-              <Text style={styles.infoTitle}>What are yogas?</Text>
-              <Text style={styles.infoText}>
-                Yogas are powerful planetary combinations — like a special chord in music. When specific planets align in particular ways in your chart, they create amplified results in certain areas of life: wealth, intelligence, fame, spiritual growth, or relationship success. Some yogas make you particularly gifted in specific areas. Others bring challenges that, when worked through, become your greatest strengths.
-              </Text>
-            </View>
           </View>
         )}
 
