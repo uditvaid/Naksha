@@ -15,6 +15,9 @@ import { generateChart } from '@services/prokerala';
 import { findActiveDasha } from '@utils/vedic';
 import { SadeSatiCard } from '@components/SadeSatiCard';
 import { DoshaCard } from '@components/DoshaCard';
+import { AskGuruButton } from '@components/AskGuruButton';
+import { lagnaDeep } from '@lib/lagnaDeepDetails';
+import { dashaTheme } from '@lib/dashaDetails';
 
 // ─── Lagna (Rising Sign) descriptions ────────────────────────────────────────
 
@@ -277,6 +280,8 @@ export default function ChartScreen() {
   const [modalLoading, setModalLoading] = useState(false);
   const [refreshingChart, setRefreshingChart] = useState(false);
   const [showApproxNotice, setShowApproxNotice] = useState(false);
+  const [lagnaModalOpen, setLagnaModalOpen] = useState(false);
+  const [selectedDashaPlanet, setSelectedDashaPlanet] = useState<string | null>(null);
   const user = { birthData, chart, isPremium: isPremiumFlag };
 
   const refreshChart = useCallback(async () => {
@@ -571,13 +576,16 @@ export default function ChartScreen() {
                   <NorthIndianChart planets={planets} />
                 </View>
 
-                {/* Rising Sign — expanded */}
+                {/* Rising Sign — expanded; tap for the deep modal */}
                 {(() => {
                   const lagna = user.chart.lagna;
                   const data = LAGNA_DATA[lagna];
                   return (
-                    <View style={styles.lagnaCard}>
-                      <Text style={styles.lagnaLabel}>RISING SIGN (ASCENDANT)</Text>
+                    <TouchableOpacity style={styles.lagnaCard} onPress={() => setLagnaModalOpen(true)} activeOpacity={0.85}>
+                      <View style={styles.lagnaHeaderRow}>
+                        <Text style={styles.lagnaLabel}>RISING SIGN</Text>
+                        <Text style={styles.lagnaTapHint}>Tap for more →</Text>
+                      </View>
                       <Text style={styles.lagnaValue}>{lagna}</Text>
                       {data ? (
                         <>
@@ -617,7 +625,7 @@ export default function ChartScreen() {
                           {lagna} was the sign rising on the horizon at the moment of your birth — it shapes your personality and how you appear to the world.
                         </Text>
                       )}
-                    </View>
+                    </TouchableOpacity>
                   );
                 })()}
 
@@ -656,9 +664,9 @@ export default function ChartScreen() {
             <SadeSatiCard birthData={user.birthData} />
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>YOUR PLANETARY PERIODS</Text>
+            <Text style={styles.sectionTitle}>YOUR LIFE CHAPTERS</Text>
             <Text style={styles.sectionSubtitle}>
-              Your life unfolds in chapters, each ruled by a planet. Tap any period to learn what it means for you.
+              Your life unfolds in chapters, each ruled by a planet — what classical Vedic astrology calls a Mahadasha. Tap any chapter to see what it brings, what to lean into, and what to watch for.
             </Text>
             {dashas.length === 0 ? (
               <Text style={styles.emptyText}>Generate your chart to see your planetary periods.</Text>
@@ -669,7 +677,7 @@ export default function ChartScreen() {
                   <TouchableOpacity
                     key={dasha.planet + dasha.startDate}
                     style={[styles.dashaCard, isActive && styles.dashaCardActive, isPast && styles.dashaCardPast]}
-                    onPress={() => openDasha(dasha, isActive, isPast, isFuture)}
+                    onPress={() => setSelectedDashaPlanet(dasha.planet)}
                     activeOpacity={0.75}
                   >
                     <View style={styles.dashaHeader}>
@@ -825,6 +833,133 @@ export default function ChartScreen() {
         }}
         onAskGuru={handleAskGuru}
       />
+
+      {/* Lagna deep modal — tap into the Rising Sign card. Plain-English
+          drill-down across love, work, money, inner life, and the
+          long arc the Rising Sign teaches you. */}
+      <Modal
+        visible={lagnaModalOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setLagnaModalOpen(false)}
+      >
+        {(() => {
+          const lagna = user.chart?.lagna ?? '';
+          const deep = lagnaDeep(lagna);
+          return (
+            <SafeAreaView style={styles.deepModalContainer}>
+              <View style={styles.deepModalHeader}>
+                <Text style={styles.deepModalLabel}>RISING SIGN · {lagna.toUpperCase()}</Text>
+                <TouchableOpacity onPress={() => setLagnaModalOpen(false)} style={styles.deepModalClose}>
+                  <Text style={styles.deepModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: Spacing.md, paddingBottom: 60 }}>
+                <Text style={styles.deepModalIntro}>
+                  Your Rising Sign is the sign that was on the eastern horizon at the moment you were born. More than your Sun sign, it shapes how you actually move through the world — your instincts, your style, the lens through which you read every room.
+                </Text>
+                {deep ? (
+                  <>
+                    <Text style={styles.deepModalSectionTitle}>LOVE & RELATIONSHIPS</Text>
+                    <Text style={styles.deepModalParagraph}>{deep.loveAndRelationships}</Text>
+
+                    <Text style={styles.deepModalSectionTitle}>WORK & PURPOSE</Text>
+                    <Text style={styles.deepModalParagraph}>{deep.workAndPurpose}</Text>
+
+                    <Text style={styles.deepModalSectionTitle}>MONEY & STABILITY</Text>
+                    <Text style={styles.deepModalParagraph}>{deep.moneyAndStability}</Text>
+
+                    <Text style={styles.deepModalSectionTitle}>INNER LIFE</Text>
+                    <Text style={styles.deepModalParagraph}>{deep.innerLifePattern}</Text>
+
+                    <Text style={styles.deepModalSectionTitle}>THE LIFELONG LESSON</Text>
+                    <Text style={styles.deepModalGrowth}>{deep.growthArc}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.deepModalParagraph}>
+                    {lagna} was rising on the horizon at your birth. Detailed plain-English content for this sign isn't authored yet — the Rising Sign card above already shows the basics.
+                  </Text>
+                )}
+                <AskGuruButton seed={`I'm a ${lagna} rising. Help me understand `} />
+              </ScrollView>
+            </SafeAreaView>
+          );
+        })()}
+      </Modal>
+
+      {/* Dasha deep modal — tap a planetary period for plain-English
+          context: what this chapter brings, what to focus on, what to
+          watch for. No API call — composed from a deterministic table. */}
+      <Modal
+        visible={selectedDashaPlanet !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedDashaPlanet(null)}
+      >
+        {selectedDashaPlanet && (() => {
+          const theme = dashaTheme(selectedDashaPlanet);
+          const matchingRow = dashaRows.find(r => r.dasha.planet === selectedDashaPlanet);
+          const status = matchingRow?.isActive ? 'now' : matchingRow?.isPast ? 'past' : 'future';
+          return (
+            <SafeAreaView style={styles.deepModalContainer}>
+              <View style={styles.deepModalHeader}>
+                <Text style={styles.deepModalLabel}>{selectedDashaPlanet.toUpperCase()}'S CHAPTER</Text>
+                <TouchableOpacity onPress={() => setSelectedDashaPlanet(null)} style={styles.deepModalClose}>
+                  <Text style={styles.deepModalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: Spacing.md, paddingBottom: 60 }}>
+                {theme ? (
+                  <>
+                    <Text style={styles.deepModalQuoteTitle}>{theme.title}</Text>
+                    <Text style={styles.deepModalSanskrit}>{theme.sanskrit} · {theme.yearsTotal} years</Text>
+                    {matchingRow && (
+                      <Text style={styles.deepModalDates}>
+                        {status === 'now' ? '⦿ ACTIVE NOW · ' : status === 'past' ? '✓ COMPLETED · ' : '○ UPCOMING · '}
+                        {matchingRow.start.getFullYear()} – {matchingRow.end.getFullYear()}
+                      </Text>
+                    )}
+
+                    <Text style={styles.deepModalSectionTitle}>THE ESSENCE</Text>
+                    <Text style={styles.deepModalParagraph}>{theme.essence}</Text>
+
+                    <Text style={styles.deepModalSectionTitle}>WHAT IT BRINGS</Text>
+                    <Text style={styles.deepModalParagraph}>{theme.whatItBrings}</Text>
+
+                    <Text style={styles.deepModalSectionTitle}>AREAS THIS PERIOD HIGHLIGHTS</Text>
+                    {theme.areasOfFocus.map((area, i) => (
+                      <View key={`a-${i}`} style={styles.deepModalBulletRow}>
+                        <Text style={[styles.deepModalBulletDot, { color: Colors.gold }]}>·</Text>
+                        <Text style={styles.deepModalBulletText}>{area}</Text>
+                      </View>
+                    ))}
+
+                    <Text style={styles.deepModalSectionTitle}>LEAN INTO</Text>
+                    {theme.leanInto.map((line, i) => (
+                      <View key={`l-${i}`} style={styles.deepModalBulletRow}>
+                        <Text style={[styles.deepModalBulletDot, { color: Colors.emerald }]}>✓</Text>
+                        <Text style={styles.deepModalBulletText}>{line}</Text>
+                      </View>
+                    ))}
+
+                    <Text style={styles.deepModalSectionTitle}>WATCH OUT FOR</Text>
+                    {theme.watchOutFor.map((line, i) => (
+                      <View key={`w-${i}`} style={styles.deepModalBulletRow}>
+                        <Text style={[styles.deepModalBulletDot, { color: Colors.amber }]}>!</Text>
+                        <Text style={styles.deepModalBulletText}>{line}</Text>
+                      </View>
+                    ))}
+
+                    <AskGuruButton seed={status === 'now' ? `I'm currently in my ${selectedDashaPlanet} life chapter. Help me understand ` : status === 'past' ? `I've already lived through my ${selectedDashaPlanet} life chapter. Help me reflect on ` : `My ${selectedDashaPlanet} life chapter is coming up. Help me prepare for `} />
+                  </>
+                ) : (
+                  <Text style={styles.deepModalParagraph}>Detailed content for {selectedDashaPlanet} isn't authored yet.</Text>
+                )}
+              </ScrollView>
+            </SafeAreaView>
+          );
+        })()}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -938,6 +1073,26 @@ const styles = StyleSheet.create({
   tapHint: { fontSize: 12, color: Colors.gold, fontFamily: Fonts.cinzel },
   lockIcon: { fontSize: 10, color: Colors.gold, fontFamily: Fonts.cinzel },
 
+  // Lagna card tap hint
+  lagnaHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  lagnaTapHint: { fontSize: 11, color: Colors.gold, fontFamily: Fonts.cinzel, opacity: 0.85, letterSpacing: 0.5 },
+
+  // Deep modal — used by both Lagna and Dasha drill-downs
+  deepModalContainer: { flex: 1, backgroundColor: Colors.midnight },
+  deepModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  deepModalLabel: { fontSize: 13, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 2 },
+  deepModalClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  deepModalCloseText: { fontSize: 18, color: Colors.muted },
+  deepModalIntro: { fontSize: 14, color: Colors.muted, fontFamily: Fonts.crimson, lineHeight: 22, fontStyle: 'italic', marginBottom: 4 },
+  deepModalQuoteTitle: { fontSize: 22, fontFamily: Fonts.cinzel, color: Colors.gold, letterSpacing: 0.3, marginTop: 4 },
+  deepModalSanskrit: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, letterSpacing: 0.5, marginTop: 4 },
+  deepModalDates: { fontSize: 12, color: Colors.amber, fontFamily: Fonts.cinzel, letterSpacing: 0.5, marginTop: 6, marginBottom: 4 },
+  deepModalSectionTitle: { fontSize: 11, letterSpacing: 2, color: Colors.gold, fontFamily: Fonts.cinzel, marginTop: Spacing.lg, marginBottom: 10 },
+  deepModalParagraph: { fontSize: 15, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 24, marginBottom: 6 },
+  deepModalGrowth: { fontSize: 15, color: Colors.star, fontFamily: Fonts.cormorantItalic, lineHeight: 26, marginBottom: 6 },
+  deepModalBulletRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 6 },
+  deepModalBulletDot: { fontSize: 16, marginTop: 1, fontFamily: Fonts.cinzel },
+  deepModalBulletText: { flex: 1, fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, opacity: 0.9 },
 });
 
 const modalStyles = StyleSheet.create({
