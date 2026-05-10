@@ -200,11 +200,11 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontFamily: Fonts.cinzel, color: Colors.gold },
   subtitle: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic, marginTop: 3 },
 
-  filterScroll: {},
-  filterContainer: { paddingHorizontal: Spacing.md, gap: 8, alignItems: 'center', paddingVertical: 8 },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.cardBorder, backgroundColor: Colors.card },
+  filterScroll: { flexGrow: 0 },
+  filterContainer: { paddingHorizontal: Spacing.md, paddingRight: Spacing.lg, gap: 8, alignItems: 'center', paddingVertical: 8 },
+  filterChip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.cardBorder, backgroundColor: Colors.card },
   filterChipActive: { borderColor: Colors.gold, backgroundColor: Colors.goldDim },
-  filterText: { fontSize: 12, fontFamily: Fonts.cinzel, color: Colors.muted },
+  filterText: { fontSize: 12, lineHeight: 16, fontFamily: Fonts.cinzel, color: Colors.muted, includeFontPadding: false },
   filterTextActive: { color: Colors.gold },
 
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: 12 },
