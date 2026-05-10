@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator, Platform, KeyboardAvoidingView,
+  TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -12,6 +12,7 @@ import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { AskGuruButton } from '@components/AskGuruButton';
 import { TarotCardDetailModal, TarotBrowseModal } from '@components/TarotCardDetailModal';
 import { shuffleAndDraw, TAROT_DECK, type DrawnCard, type SpreadType, type TarotCard } from '@utils/tarot';
+import { useTarotStreakStore, CELTIC_CROSS_DAILY_CAP } from '@store/tarotStreakStore';
 
 const SPREADS: { id: SpreadType; label: string; description: string; cardCount: number }[] = [
   { id: 'single',       label: 'Single Card',                description: 'A focused message for the question at hand.',                                                            cardCount: 1 },
@@ -37,8 +38,25 @@ export default function TarotScreen() {
   const [browsedCard, setBrowsedCard] = useState<DrawnCard | null>(null);
 
   const draw = useCallback(async () => {
+    // Soft cap on Celtic Cross draws — it costs ~2x the tokens of a
+    // regular spread, and we want to discourage rapid-fire requests
+    // racking up cost. The cap is generous (5/day), persisted, and
+    // resets at calendar-day rollover. Other spreads are uncapped.
+    if (spread === 'celticCross') {
+      const count = useTarotStreakStore.getState().getCelticCrossCountToday();
+      if (count >= CELTIC_CROSS_DAILY_CAP) {
+        Alert.alert(
+          'Take a beat',
+          `The Celtic Cross is the deepest reading we offer — and it asks for time to actually integrate. You've already drawn ${count} today. Try again tomorrow, or pick a smaller spread for now.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const cards = shuffleAndDraw(spread, { allowReversed });
+    if (spread === 'celticCross') useTarotStreakStore.getState().recordCelticCross();
     setDrawn(cards);
     setRevealedIndex(-1);
     setReading('');

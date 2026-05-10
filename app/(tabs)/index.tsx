@@ -222,15 +222,26 @@ export default function HomeScreen() {
 
   // Defensive: if the app stays foregrounded across midnight without an
   // AppState change (rare on real devices, common on simulator with
-  // "Slow Animations" off), schedule a one-shot refresh at next midnight.
+  // "Slow Animations" off), self-schedule a refresh at the next midnight.
+  // Self-rescheduling chain avoids the previous churn pattern where
+  // nowTick was in the deps array — every focus event would cancel and
+  // re-create the timer. Now: scheduled once on mount, the fired
+  // callback bumps nowTick AND schedules the next midnight.
   useEffect(() => {
-    const now = new Date();
-    const nextMidnight = new Date(now);
-    nextMidnight.setHours(24, 0, 5, 0); // 5s past midnight to be safe
-    const ms = nextMidnight.getTime() - now.getTime();
-    const t = setTimeout(() => setNowTick(Date.now()), ms);
-    return () => clearTimeout(t);
-  }, [nowTick]);
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 5, 0); // 5s past midnight to be safe
+      const ms = nextMidnight.getTime() - now.getTime();
+      timer = setTimeout(() => {
+        setNowTick(Date.now());
+        schedule();
+      }, ms);
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>

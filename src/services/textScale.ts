@@ -35,6 +35,16 @@ const TextAny = Text as any;
 TextAny.defaultProps = TextAny.defaultProps || {};
 TextAny.defaultProps.maxFontSizeMultiplier = 1.5;
 
+// Module-level cache of the current scale. `useAppStore.getState()` was
+// being called inside every Text.render — fast, but at default Large
+// (1.15) every Text in the app goes through the clone path so this fires
+// hundreds of times per screen. The subscribe call below keeps this cache
+// in sync with the store; the Text patch reads the local var instead.
+let _currentScale = useAppStore.getState().user.fontScale ?? 1;
+useAppStore.subscribe((state) => {
+  _currentScale = state.user.fontScale ?? 1;
+});
+
 // Patch Text.render exactly once. The flag is checked + set in the same
 // tick to defend against double-imports on hot reload (which would
 // otherwise compose the patch with itself and double-scale).
@@ -43,12 +53,11 @@ if (originalRender && !TextAny.__naksha_text_patched) {
   TextAny.__naksha_text_patched = true;
   TextAny.render = function patchedRender(this: any, ...args: any[]) {
     const tree = originalRender.apply(this, args);
-    const userScale = useAppStore.getState().user.fontScale ?? 1;
-    if (userScale === 1) return tree;
+    if (_currentScale === 1) return tree;
     const flat = StyleSheet.flatten(tree.props.style) as { fontSize?: number } | undefined;
     if (!flat?.fontSize) return tree;
     return React.cloneElement(tree, {
-      style: [tree.props.style, { fontSize: flat.fontSize * userScale }],
+      style: [tree.props.style, { fontSize: flat.fontSize * _currentScale }],
     });
   };
 }

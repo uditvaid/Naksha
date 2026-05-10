@@ -32,12 +32,16 @@ export function DailyTarotCard({ userKey, nowTick }: Props) {
   const currentStreak = useTarotStreakStore(s => s.currentStreak);
   const longestStreak = useTarotStreakStore(s => s.longestStreak);
 
-  // Per-user-per-day deterministic draw. nowTick included so the card
-  // rotates at midnight when the home screen's daily-refresh listener
-  // bumps nowTick.
+  // Per-user-per-day deterministic draw. The card only changes at the
+  // calendar-day boundary, so memoise by ISO date string instead of the
+  // millisecond `nowTick` — `nowTick` bumps on every AppState 'active'
+  // and focus event, which would otherwise force a Fisher-Yates re-shuffle
+  // 3-5× per session for an unchanged result.
+  const isoDate = new Date(nowTick).toISOString().split('T')[0]!;
   const card: DrawnCard = useMemo(
     () => dailyCardOfTheDay(userKey, new Date(nowTick)),
-    [userKey, nowTick],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [userKey, isoDate],
   );
 
   const onTap = () => {

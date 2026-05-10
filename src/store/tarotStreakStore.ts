@@ -24,13 +24,31 @@ interface TarotStreakState {
   longestStreak: number;
   /** Total cards pulled, all time. */
   totalPulls: number;
+  /** Per-day Celtic Cross counter. Resets when the date rolls over.
+   *  Used to soft-cap expensive readings — Celtic Cross is 2x token
+   *  cost vs a regular spread, so we let users do up to N per day. */
+  celticCrossDay: string | null;
+  celticCrossCount: number;
   /** Mark today's pull. Idempotent — pulling twice on the same day
    *  doesn't double-count. */
   recordPull: () => void;
+  /** Increment the Celtic Cross counter (resets if date rolled over).
+   *  Returns the count AFTER incrementing, so callers can compare
+   *  against caps. */
+  recordCelticCross: () => number;
+  /** Reads the current count (with auto-rollover). */
+  getCelticCrossCountToday: () => number;
   reset: () => void;
 }
 
-const INITIAL = { lastPullDate: null, currentStreak: 0, longestStreak: 0, totalPulls: 0 };
+const INITIAL = {
+  lastPullDate: null, currentStreak: 0, longestStreak: 0, totalPulls: 0,
+  celticCrossDay: null, celticCrossCount: 0,
+};
+
+/** Soft cap on Celtic Cross readings per calendar day. Exposed so the
+ *  caller can show a "you've done X / 5 today" hint as it approaches. */
+export const CELTIC_CROSS_DAILY_CAP = 5;
 
 function isYesterday(today: string, last: string): boolean {
   const td = new Date(today);
@@ -58,6 +76,20 @@ export const useTarotStreakStore = create<TarotStreakState>()(
           longestStreak: Math.max(state.longestStreak, newStreak),
           totalPulls: state.totalPulls + 1,
         });
+      },
+
+      recordCelticCross: () => {
+        const today = new Date().toISOString().split('T')[0]!;
+        const state = get();
+        const count = state.celticCrossDay === today ? state.celticCrossCount + 1 : 1;
+        set({ celticCrossDay: today, celticCrossCount: count });
+        return count;
+      },
+
+      getCelticCrossCountToday: () => {
+        const today = new Date().toISOString().split('T')[0]!;
+        const state = get();
+        return state.celticCrossDay === today ? state.celticCrossCount : 0;
       },
 
       reset: () => set(INITIAL),

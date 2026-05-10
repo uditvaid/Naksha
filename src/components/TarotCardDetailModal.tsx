@@ -8,6 +8,7 @@
  * the card name + orientation so users can ask follow-ups.
  */
 
+import { useMemo } from 'react';
 import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
@@ -138,23 +139,34 @@ interface BrowseProps {
   onSelect: (card: TarotCard) => void;
 }
 
-export function TarotBrowseModal({ visible, onClose, onSelect }: BrowseProps) {
-  const major = TAROT_DECK.filter(c => c.arcana === 'major');
-  const wands = TAROT_DECK.filter(c => c.suit === 'wands');
-  const cups = TAROT_DECK.filter(c => c.suit === 'cups');
-  const swords = TAROT_DECK.filter(c => c.suit === 'swords');
-  const pents = TAROT_DECK.filter(c => c.suit === 'pentacles');
+// TAROT_DECK is a module-level constant — partition it once at import
+// time instead of recomputing five filter() passes on every render.
+const _major = TAROT_DECK.filter(c => c.arcana === 'major');
+const _wands = TAROT_DECK.filter(c => c.suit === 'wands');
+const _cups = TAROT_DECK.filter(c => c.suit === 'cups');
+const _swords = TAROT_DECK.filter(c => c.suit === 'swords');
+const _pents = TAROT_DECK.filter(c => c.suit === 'pentacles');
 
-  const renderRow = (cards: TarotCard[]) => (
-    <View style={browseStyles.grid}>
-      {cards.map(c => (
-        <TouchableOpacity key={c.id} style={browseStyles.cell} onPress={() => onSelect(c)} activeOpacity={0.85}>
-          <Text style={browseStyles.cellSymbol}>{c.symbol}</Text>
-          <Text style={browseStyles.cellName} numberOfLines={2}>{c.name}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+export function TarotBrowseModal({ visible, onClose, onSelect }: BrowseProps) {
+  // Memoise the rendered grid sections — TAROT_DECK is static, only
+  // `onSelect` changes with the parent's render. ~234 child Text nodes
+  // are reused across re-renders this way; without the memo, every
+  // parent re-render re-built the entire 78-card tree even when the
+  // modal wasn't visible.
+  const grid = useMemo(() => {
+    const renderRow = (cards: TarotCard[]) => (
+      <View style={browseStyles.grid}>
+        {cards.map(c => (
+          <TouchableOpacity key={c.id} style={browseStyles.cell} onPress={() => onSelect(c)} activeOpacity={0.85}>
+            <Text style={browseStyles.cellSymbol}>{c.symbol}</Text>
+            <Text style={browseStyles.cellName} numberOfLines={2}>{c.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+    return { renderRow };
+  }, [onSelect]);
+  const renderRow = grid.renderRow;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
@@ -171,19 +183,19 @@ export function TarotBrowseModal({ visible, onClose, onSelect }: BrowseProps) {
           </Text>
 
           <Text style={browseStyles.suitLabel}>MAJOR ARCANA · 22 CARDS</Text>
-          {renderRow(major)}
+          {renderRow(_major)}
 
           <Text style={[browseStyles.suitLabel, { color: '#E07B39' }]}>WANDS · ACTION</Text>
-          {renderRow(wands)}
+          {renderRow(_wands)}
 
           <Text style={[browseStyles.suitLabel, { color: '#5DADE2' }]}>CUPS · FEELING</Text>
-          {renderRow(cups)}
+          {renderRow(_cups)}
 
           <Text style={[browseStyles.suitLabel, { color: '#F5F0E8' }]}>SWORDS · THOUGHT</Text>
-          {renderRow(swords)}
+          {renderRow(_swords)}
 
           <Text style={[browseStyles.suitLabel, { color: '#27AE60' }]}>PENTACLES · MATTER</Text>
-          {renderRow(pents)}
+          {renderRow(_pents)}
         </ScrollView>
       </SafeAreaView>
     </Modal>
