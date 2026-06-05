@@ -47,3 +47,23 @@ jest.mock('expo-constants', () => ({
 jest.mock('expo-crypto', () => ({
   randomUUID: () => Math.random().toString(36).slice(2),
 }));
+
+// @sentry/react-native ships as ESM; jest-expo's transformIgnorePatterns
+// doesn't whitelist it, so a raw import throws "Unexpected token 'export'".
+// Tests don't exercise telemetry; stub the surface our code touches.
+jest.mock('@sentry/react-native', () => ({
+  init: jest.fn(),
+  captureException: jest.fn(),
+  addBreadcrumb: jest.fn(),
+  ErrorBoundary: ({ children }: { children: unknown }) => children,
+}));
+
+// NetInfo is a native module. Stub the listener API so OfflineBanner
+// renders harmlessly under jest if it's ever pulled into a render test.
+jest.mock('@react-native-community/netinfo', () => ({
+  __esModule: true,
+  default: {
+    addEventListener: jest.fn(() => () => { /* unsubscribe no-op */ }),
+    fetch: jest.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
+  },
+}));

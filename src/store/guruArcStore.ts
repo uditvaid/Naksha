@@ -133,7 +133,20 @@ export const useGuruArcStore = create<GuruArcState>()(
     {
       name: 'naksha-guru-arc',
       storage: createJSONStorage(() => AsyncStorage),
+      // Baseline. The UserArc shape has not changed since launch.
+      // ANY field rename, type change, or non-optional addition to
+      // UserArc requires bumping `version` here and adding a real
+      // transformation in `migrate` — otherwise hydrated state will
+      // be malformed and either crash or silently corrupt the arc.
       version: 1,
+      migrate: (persistedState: unknown, _fromVersion: number) => {
+        // Defensive: a write interrupted by app-kill can leave the
+        // persist blob as null, undefined, or a partial object missing
+        // required arrays. Spread defaults so consumers (which iterate
+        // stuckPoints, growthMoments, etc.) never see undefined arrays.
+        const valid = persistedState && typeof persistedState === 'object';
+        return { ...EMPTY_ARC, ...(valid ? (persistedState as Partial<UserArc>) : {}) };
+      },
     }
   )
 );

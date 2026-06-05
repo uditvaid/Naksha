@@ -111,15 +111,24 @@ export default function PalmScreen() {
       // On failure we keep it so the user can retry without re-picking.
       setImageBase64(null);
     } catch (e: any) {
-      const msg = e?.message;
-      const isNetworkOrTimeout = msg && (
-        msg.includes('too long') || msg.includes('reach') || msg.includes('unavailable')
-      );
+      // The Claude analysis can fail for several distinct reasons —
+      // network/timeout, server error, model returned an unparseable
+      // response. Earlier we string-matched the error message ("too long",
+      // "reach", "unavailable") to decide whether to surface the raw text
+      // or a generic "ensure your palm is visible" — fragile and masked
+      // real network errors as user-image issues. Now we surface the
+      // underlying message when it's reasonably user-friendly and fall
+      // back to a neutral retry message otherwise.
+      const raw: string = e?.message ?? '';
+      const looksUserFacing =
+        raw.length > 0 &&
+        raw.length < 200 &&
+        !/\b(undefined|null|TypeError|object Object|stack)\b/i.test(raw);
       Alert.alert(
-        'Reading Failed',
-        isNetworkOrTimeout
-          ? msg
-          : 'Could not analyze the image. Please ensure your palm is clearly visible and try again.',
+        'Reading Didn\'t Go Through',
+        looksUserFacing
+          ? raw
+          : 'We couldn\'t complete the reading. Please check your connection and try again, or pick a clearer photo of your palm.',
       );
     } finally {
       setLoading(false);

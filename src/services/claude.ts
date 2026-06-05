@@ -344,8 +344,18 @@ Write in plain, warm English that anyone can understand — no astrology jargon,
 
 Cover: how today's energy feels and what it's good for; one thing worth paying attention to in their life right now; something to move gently with today; and one simple, practical thing they can do this morning to feel more grounded and clear.
 
-Keep it warm and personal — like a trusted friend who happens to see the bigger picture. Address ${firstName} by first name naturally within the reading (not at the very start as a salutation, but woven in once or twice). Do not use markdown formatting — no #, **, or bullet points. Plain prose only.`,
-  }], 700, system);
+Keep it warm and personal — like a trusted friend who happens to see the bigger picture. Address ${firstName} by first name naturally within the reading (not at the very start as a salutation, but woven in once or twice). Do not use markdown formatting — no #, **, or bullet points. Plain prose only.
+
+After the prose, leave a blank line and then output exactly this structured block — no preamble, no markdown, single-line sentences only:
+
+---LIFE AREAS---
+WORK: <one warm sentence about work / craft / output today>
+LOVE: <one warm sentence about relationships / connection today>
+HEALTH: <one warm sentence about body / energy today>
+INNER: <one warm sentence about inner life / reflection today>
+
+Each life-area line must be a single sentence, 10-22 words, written in the same warm voice as the prose. No labels other than the four shown. Do not address ${firstName} by name in the life-area block.`,
+  }], 850, system);
 }
 
 // ─── Palm Reading ─────────────────────────────────────────────────────────────

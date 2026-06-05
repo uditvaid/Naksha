@@ -70,12 +70,13 @@ export default function TermsOfServiceScreen() {
 
         <Section title="5. Premium Subscription">
           <Bold>a) Plans & Pricing</Bold>
-          {'\n'}Naksha offers premium subscriptions through the Apple App Store and Google Play Store:
-          {'\n'}- Monthly: $14.99/month
+          {'\n'}Naksha offers premium subscriptions through the Apple App Store and Google Play Store.
+          Local prices are shown in your store currency at purchase; representative USD prices:
+          {'\n'}- Three-month: $39.99 / 3 months
           {'\n'}- Annual: $149.99/year
           {'\n'}- Lifetime: $249.99 one-time purchase
           {'\n\n'}<Bold>b) Auto-Renewal</Bold>
-          {'\n'}Monthly and annual subscriptions auto-renew at the end of each billing period unless
+          {'\n'}Three-month and annual subscriptions auto-renew at the end of each billing period unless
           cancelled at least 24 hours before the renewal date. Lifetime purchases do not renew.
           {'\n\n'}<Bold>c) Cancellation</Bold>
           {'\n'}You can cancel your subscription at any time through your Apple App Store or Google Play
@@ -85,9 +86,10 @@ export default function TermsOfServiceScreen() {
           {'\n'}Refund requests are handled by Apple or Google in accordance with their respective refund
           policies. We do not process refunds directly.
           {'\n\n'}<Bold>e) Free Tier</Bold>
-          {'\n'}Non-premium users have access to limited features including up to 3 AI Guru conversations
-          per day and basic chart information. Premium features include unlimited conversations, palm
-          reading, numerology, Chinese astrology, Lal Kitab remedies, compatibility analysis, and
+          {'\n'}Non-premium users have access to limited features including up to 2 AI Guru conversations
+          per day (with bonus questions earned by maintaining an opening streak) and basic chart
+          information. Premium features include unlimited Guru conversations, palm reading, numerology,
+          Chinese astrology, Lal Kitab remedies, compatibility analysis, full tarot spreads, and
           advanced chart features.
         </Section>
 

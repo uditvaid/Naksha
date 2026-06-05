@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Alert,
@@ -37,6 +37,28 @@ export default function TarotScreen() {
   const [browseOpen, setBrowseOpen] = useState(false);
   const [browsedCard, setBrowsedCard] = useState<DrawnCard | null>(null);
 
+  // Mounted + cancellation guards for the reveal sequence.
+  //
+  // The draw flow chains ~10 timeouts (Celtic Cross) before the Claude
+  // call fires. If the user backgrounds the app or navigates away
+  // mid-reveal, those timeouts keep firing on an unmounted component —
+  // each triggering setRevealedIndex on a dead component AND a haptic
+  // that fires for nothing.
+  //
+  // `mountedRef` blocks setState after unmount. `cancelRef` is checked
+  // inside the reveal loop so an unmount mid-sleep aborts the loop
+  // before the next setRevealedIndex.
+  const mountedRef = useRef(true);
+  const cancelRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    cancelRef.current = false;
+    return () => {
+      mountedRef.current = false;
+      cancelRef.current = true;
+    };
+  }, []);
+
   const draw = useCallback(async () => {
     // Soft cap on Celtic Cross draws — it costs ~2x the tokens of a
     // regular spread, and we want to discourage rapid-fire requests
@@ -61,9 +83,15 @@ export default function TarotScreen() {
     setRevealedIndex(-1);
     setReading('');
 
-    // Reveal cards one at a time for a more deliberate feel.
+    // Reset cancel ref for this fresh draw — a previous draw's cancel
+    // shouldn't bleed into this one.
+    cancelRef.current = false;
+
+    // Reveal cards one at a time for a more deliberate feel. Guard each
+    // iteration so an unmount mid-sequence aborts cleanly.
     for (let i = 0; i < cards.length; i++) {
       await new Promise<void>((r) => setTimeout(r, 450));
+      if (cancelRef.current || !mountedRef.current) return;
       setRevealedIndex(i);
       Haptics.selectionAsync();
     }
@@ -72,6 +100,7 @@ export default function TarotScreen() {
     setLoading(true);
     try {
       const text = await getTarotReading(question, spread, cards, user.birthData, user.chart);
+      if (!mountedRef.current) return;
       setReading(text);
       saveReading({
         type: 'tarot',
@@ -90,9 +119,11 @@ export default function TarotScreen() {
         spreadType: spread,
       });
     } catch (e: any) {
-      setReading(`Unable to get tarot reading: ${e?.message ?? 'Please try again shortly.'}`);
+      if (mountedRef.current) {
+        setReading(`Unable to get tarot reading: ${e?.message ?? 'Please try again shortly.'}`);
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [spread, question, user.birthData, user.chart, saveReading, allowReversed]);
 

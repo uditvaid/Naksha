@@ -9,6 +9,7 @@ import { NAKSHATRAS, MAHADASHA_YEARS } from '@constants/astrology';
 import { PROXY_BASE_URL } from '@constants/config';
 import { buildAuthHeader } from './auth';
 import { calculateVimshottariDasha } from '@utils/vedic';
+import { addBreadcrumb } from './telemetry';
 
 const BASE_URL = `${PROXY_BASE_URL}/v1/prokerala`;
 
@@ -842,10 +843,22 @@ export async function generateChart(birthData: BirthData): Promise<ChartData> {
     ayanamsa: '1', // Lahiri
   };
 
-  // Fetch planet positions and kundli in parallel
+  // Fetch planet positions and kundli in parallel. Each sub-call has its
+  // own catch that records a Sentry breadcrumb. We deliberately don't
+  // throw — partial failures fall through to local fallbacks below so
+  // onboarding completes. The breadcrumbs let us measure how often this
+  // degraded path fires without flooding the inbox with reportError.
   const [kundliData, planetData] = await Promise.all([
-    prokeralaGet('kundli', { ...baseParams, chart_type: 'rasi' }).catch((e) => { if (__DEV__) console.warn('[Prokerala] kundli failed:', e?.message); return null; }),
-    prokeralaGet('planet-position', baseParams).catch((e) => { if (__DEV__) console.warn('[Prokerala] planet-position failed:', e?.message); return null; }),
+    prokeralaGet('kundli', { ...baseParams, chart_type: 'rasi' }).catch((e) => {
+      if (__DEV__) console.warn('[Prokerala] kundli failed:', e?.message);
+      addBreadcrumb('prokerala kundli fetch failed', 'lifecycle', { error: e?.message ?? 'unknown' });
+      return null;
+    }),
+    prokeralaGet('planet-position', baseParams).catch((e) => {
+      if (__DEV__) console.warn('[Prokerala] planet-position failed:', e?.message);
+      addBreadcrumb('prokerala planet-position fetch failed', 'lifecycle', { error: e?.message ?? 'unknown' });
+      return null;
+    }),
   ]);
 
   // The v2 planet-position endpoint returns the ascendant alongside the
@@ -926,6 +939,13 @@ export async function generateChart(birthData: BirthData): Promise<ChartData> {
     }
   } else {
     if (__DEV__) console.warn('[Prokerala] Using fallback planet positions (no API data). timeOfBirth:', birthData.timeOfBirth, 'timezone:', birthData.timezone);
+    // The user got a degraded chart but doesn't know it. Track frequency
+    // via a breadcrumb so we can answer "how often is this happening" if
+    // a related Sentry error fires later.
+    addBreadcrumb('prokerala chart used local-fallback planets', 'lifecycle', {
+      timezone: birthData.timezone,
+      reason: 'no_api_data',
+    });
     planets = buildFallbackPlanets(lagnaSignIndex, birthData);
   }
 
@@ -934,8 +954,16 @@ export async function generateChart(birthData: BirthData): Promise<ChartData> {
   // The API can return a wrong starting lord when its internal Moon position differs
   // slightly from our parsed planet-position data near nakshatra boundaries.
   const [yogaResult, navResult] = await Promise.all([
-    prokeralaGet('yoga', baseParams).catch((e) => { if (__DEV__) console.warn('[Prokerala] yoga failed:', e?.message); return null; }),
-    prokeralaGet('kundli', { ...baseParams, chart_type: 'navamsa' }).catch((e) => { if (__DEV__) console.warn('[Prokerala] navamsa failed:', e?.message); return null; }),
+    prokeralaGet('yoga', baseParams).catch((e) => {
+      if (__DEV__) console.warn('[Prokerala] yoga failed:', e?.message);
+      addBreadcrumb('prokerala yoga fetch failed', 'lifecycle', { error: e?.message ?? 'unknown' });
+      return null;
+    }),
+    prokeralaGet('kundli', { ...baseParams, chart_type: 'navamsa' }).catch((e) => {
+      if (__DEV__) console.warn('[Prokerala] navamsa failed:', e?.message);
+      addBreadcrumb('prokerala navamsa fetch failed', 'lifecycle', { error: e?.message ?? 'unknown' });
+      return null;
+    }),
   ]);
 
   const dashas = buildFallbackDashas(planets, birthData);

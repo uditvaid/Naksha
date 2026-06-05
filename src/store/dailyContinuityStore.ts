@@ -36,6 +36,10 @@ export interface DailyRecord {
   isQuietDay: boolean;
   isDeepDay: boolean;    // the 1-in-20 substantial days
   hasCallback: boolean;  // references something from 2-4 weeks ago
+  /** Short themed pill ("Full moon", "Saturn chapter") shown on the
+   * archive list. Optional for backwards-compat with records written
+   * before this field existed; archive falls back to mahadasha. */
+  themeTag?: string;
 }
 
 export interface JournalEntry {
@@ -153,7 +157,16 @@ export const useDailyContinuityStore = create<ContinuityState & ContinuityAction
     {
       name: 'naksha-daily-continuity',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 1,
+      // v2: DailyRecord gained optional `themeTag` field (Jun 2026).
+      // Existing records without it fall back to `${mahadasha} chapter`
+      // in the archive UI; no transformation required.
+      version: 2,
+      migrate: (persistedState: unknown, _fromVersion: number) => {
+        // No-op migration. The added field is optional; consumers handle
+        // absence gracefully. Future field changes that aren't backward
+        // compatible should transform the persisted blob here.
+        return persistedState as ContinuityState;
+      },
     }
   )
 );

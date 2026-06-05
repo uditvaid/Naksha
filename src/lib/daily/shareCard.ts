@@ -91,7 +91,10 @@ export function buildShareMoment(reading: string, ctx: ShareCardContext): ShareM
     month: 'long',
     day: 'numeric',
   });
-  const attribution = '— naksha · vedic astrology';
+  // Two-line attribution: brand line + AI-generated disclosure. Apple's
+  // newer AI-content guidance asks that AI-assisted content surfaced for
+  // sharing be identifiable as such. The disclosure is small but present.
+  const attribution = '— naksha · vedic astrology\nAI-assisted reading';
 
   const fullText = [
     `"${quote}"`,

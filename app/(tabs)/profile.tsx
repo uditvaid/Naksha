@@ -21,6 +21,7 @@ export default function ProfileScreen() {
   const setChart = useAppStore(s => s.setChart);
   const setUser = useAppStore(s => s.setUser);
   const reset = useAppStore(s => s.reset);
+  const removeSavedChart = useAppStore(s => s.removeSavedChart);
   const currentFontOption: FontScaleOption = fontScaleOption(user.fontScale ?? 1);
 
   // Notification time picker state — `pickerTime` is the spinner's
@@ -85,12 +86,16 @@ export default function ProfileScreen() {
   };
 
   const handleReset = () => {
+    // App Store Guideline 5.1.1(v) — apps that let users provide
+    // personal data must offer in-app deletion. Naksha doesn't create
+    // accounts (no cloud sync) but the data deletion path lives here.
+    // Naming + copy matches what Apple reviewers expect.
     Alert.alert(
-      'Reset Profile',
-      'This will clear all your birth data and chart. Are you sure?',
+      'Delete All Data',
+      'This will permanently remove your birth details, chart, saved readings, Guru history, streaks, and preferences from this device. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Reset', style: 'destructive', onPress: () => { reset(); router.replace('/onboarding'); } },
+        { text: 'Delete', style: 'destructive', onPress: () => { reset(); router.replace('/onboarding'); } },
       ]
     );
   };
@@ -154,12 +159,29 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Saved Charts */}
+        {/* Saved Charts — long-press a row to remove. Confirmation dialog
+            so an accidental press doesn't silently nuke a saved chart. */}
         {user.savedCharts.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>SAVED CHARTS</Text>
             {user.savedCharts.map(chart => (
-              <View key={chart.id} style={styles.savedChartCard}>
+              <TouchableOpacity
+                key={chart.id}
+                style={styles.savedChartCard}
+                onLongPress={() => {
+                  Alert.alert(
+                    'Remove Chart',
+                    `Remove ${chart.name}'s chart from your saved list? This doesn't affect your own profile.`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Remove', style: 'destructive', onPress: () => removeSavedChart(chart.id) },
+                    ]
+                  );
+                }}
+                delayLongPress={400}
+                accessibilityLabel={`${chart.name}, ${chart.relation}. Long press to remove.`}
+                accessibilityRole="button"
+              >
                 <View style={styles.savedChartAvatar}>
                   <Text style={styles.savedChartAvatarText}>{chart.name[0]?.toUpperCase() ?? '?'}</Text>
                 </View>
@@ -167,8 +189,9 @@ export default function ProfileScreen() {
                   <Text style={styles.savedChartName} numberOfLines={1}>{chart.name}</Text>
                   <Text style={styles.savedChartRel} numberOfLines={1}>{chart.relation}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
+            <Text style={styles.savedChartsHint}>Long-press to remove</Text>
           </View>
         )}
 
@@ -216,8 +239,13 @@ export default function ProfileScreen() {
               <Text style={styles.accountRowText}>Terms of Service</Text>
               <Text style={styles.accountRowArrow}>→</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.accountRow, styles.accountRowDanger]} onPress={handleReset}>
-              <Text style={[styles.accountRowText, { color: Colors.ruby }]}>Reset Profile</Text>
+            <TouchableOpacity
+              style={[styles.accountRow, styles.accountRowDanger]}
+              onPress={handleReset}
+              accessibilityLabel="Delete all data and reset Naksha"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.accountRowText, { color: Colors.ruby }]}>Delete All Data</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -462,6 +490,7 @@ const styles = StyleSheet.create({
   savedChartAvatarText: { fontSize: 18, fontFamily: Fonts.cinzel, color: Colors.gold },
   savedChartName: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.star },
   savedChartRel: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic },
+  savedChartsHint: { fontSize: 11, color: Colors.muted, fontFamily: Fonts.cormorantItalic, opacity: 0.7, marginTop: 6, textAlign: 'center' },
   accountList: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.lg, overflow: 'hidden' },
   accountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   accountRowDanger: { borderBottomWidth: 0 },

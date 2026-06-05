@@ -10,6 +10,12 @@
     "preview": {
       "distribution": "internal",
       "environment": "production",
+      "env": {
+        "// ENABLE_TEST_MODE is dev-only — it surfaces the Profile-tab toggle that grants premium without IAP.": "",
+        "// Lives on the `preview` profile (internal/QA via Ad Hoc) but NOT on testflight or production,": "",
+        "// so the App Review build cannot accidentally show a way to bypass purchases.": "",
+        "ENABLE_TEST_MODE": "true"
+      },
       "ios": {
         "resourceClass": "m-medium",
         "image": "latest"
@@ -17,9 +23,6 @@
     },
     "testflight": {
       "environment": "production",
-      "env": {
-        "ENABLE_TEST_MODE": "true"
-      },
       "ios": {
         "resourceClass": "m-medium",
         "image": "latest"
@@ -48,5 +51,12 @@
         "appleTeamId": "P7Y9F7LD59"
       }
     }
-  }
+  },
+  "// REQUIRED EAS PROJECT SECRETS (set via `eas secret:create` for the `production` environment)": [
+    "PROXY_BASE_URL          — Cloudflare Worker base URL",
+    "APP_HMAC_SECRET         — server-side shared secret for x-naksha-auth signing",
+    "REVENUECAT_IOS_KEY      — RevenueCat publishable iOS key (appl_...)",
+    "REVENUECAT_ANDROID_KEY  — RevenueCat publishable Android key (goog_...)",
+    "SENTRY_DSN              — (optional) Sentry project DSN for crash reporting"
+  ]
 }

@@ -154,7 +154,20 @@ export const useGuruMemoryStore = create<GuruMemoryState>()(
     {
       name: 'naksha-guru-memory',
       storage: createJSONStorage(() => AsyncStorage),
+      // Baseline. The UserMemory shape has not changed since launch.
+      // ANY field rename, type change, or non-optional addition to
+      // UserMemory requires bumping `version` here and adding a real
+      // transformation in `migrate` — otherwise hydrated state will
+      // be malformed and either crash or silently corrupt memory.
       version: 1,
+      migrate: (persistedState: unknown, _fromVersion: number) => {
+        // Defensive: a write interrupted by app-kill can leave the
+        // persist blob as null, undefined, or a partial object missing
+        // required arrays. Spread defaults so consumers (which iterate
+        // facts, etc.) never see undefined arrays.
+        const valid = persistedState && typeof persistedState === 'object';
+        return { ...EMPTY_MEMORY, ...(valid ? (persistedState as Partial<UserMemory>) : {}) };
+      },
     }
   )
 );

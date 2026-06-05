@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, memo } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl, ActivityIndicator, Modal, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
@@ -7,7 +7,10 @@ import { useShallow } from 'zustand/react/shallow';
 import { getDailyReading } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { computeLunarPhase } from '@lib/daily/signals';
+import { composeReadingContext, parseReadingResponse, type LifeAreas } from '@lib/daily/readingComposition';
+import { useAppOpenStreakStore, guruBonusForStreak } from '@store/appOpenStreakStore';
 import { DailyShareButton } from '@components/DailyShareButton';
+import { DailyReadingAudioButton } from '@components/DailyReadingAudioButton';
 import { useDailyContinuityStore, DailyRecord } from '@store/dailyContinuityStore';
 import { todaysAffirmation, todaysFocus } from '@lib/dailyAffirmation';
 import { usePanchang, panchangSummaryLine } from '@lib/panchang';
@@ -29,7 +32,9 @@ function stripMarkdown(text: string): string {
 
 // Module-level cache survives tab unmounts — avoids refetching every time user navigates back.
 // Keyed on (date, userKey) so a profile reset / re-onboard invalidates the previous user's reading.
-let _dailyReadingCache: { date: string; userKey: string; text: string } | null = null;
+// `lifeAreas` is the parsed structured block from the Claude response; null when the
+// response was older / malformed and we fall back to prose-only rendering.
+let _dailyReadingCache: { date: string; userKey: string; text: string; lifeAreas: LifeAreas | null } | null = null;
 // In-flight guard so pull-to-refresh during initial load doesn't fire two parallel API calls.
 let _dailyReadingInFlight: Promise<void> | null = null;
 
@@ -56,22 +61,35 @@ function formatArchiveDate(iso: string): string {
 onAppReset(() => { _dailyReadingCache = null; _dailyReadingInFlight = null; });
 
 export default function HomeScreen() {
-  const { birthData, chart, isPremium, aiDisclosureAcknowledged } = useAppStore(useShallow(s => ({
+  const { birthData, chart, isPremium, aiDisclosureAcknowledged, hasHydrated } = useAppStore(useShallow(s => ({
     birthData: s.user.birthData,
     chart: s.user.chart,
     isPremium: s.user.isPremium,
     aiDisclosureAcknowledged: s.user.aiDisclosureAcknowledged,
+    hasHydrated: s._hasHydrated,
   })));
   const acknowledgeAIDisclosure = useAppStore(s => s.acknowledgeAIDisclosure);
   const initialKey = userCacheKey(birthData);
   const initialDateKey = new Date().toISOString().split('T')[0]!;
+  const initialCacheValid = _dailyReadingCache?.date === initialDateKey && _dailyReadingCache?.userKey === initialKey;
   const [dailyReading, setDailyReading] = useState(
-    _dailyReadingCache?.date === initialDateKey && _dailyReadingCache?.userKey === initialKey
-      ? _dailyReadingCache.text
-      : ''
+    initialCacheValid ? _dailyReadingCache!.text : ''
+  );
+  const [lifeAreas, setLifeAreas] = useState<LifeAreas | null>(
+    initialCacheValid ? _dailyReadingCache!.lifeAreas : null
   );
   const [loadingReading, setLoadingReading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Mounted guard for fetchDailyReading. The Claude call can run 30s;
+  // if the user closes the app (component unmounts) before it resolves,
+  // post-await setDailyReading / setLifeAreas / setLoadingReading fire
+  // on an unmounted component and React 18 emits a warning. The
+  // _dailyReadingCache module-level write is safe — it's a plain object.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const [showAIDisclosure, setShowAIDisclosure] = useState(false);
   const [showReadingModal, setShowReadingModal] = useState(false);
   const [showAffirmationModal, setShowAffirmationModal] = useState(false);
@@ -145,6 +163,14 @@ export default function HomeScreen() {
     };
   }, [nowTick]);
 
+  // Deterministic composition layer — chips, provenance footer, tomorrow's
+  // peek, journal prompts, theme tag. Free; recomputes only when the chart
+  // or the calendar date changes.
+  const composition = useMemo(
+    () => composeReadingContext(chart, new Date(nowTick)),
+    [chart, nowTick],
+  );
+
   const fetchDailyReading = useCallback(async (force = false) => {
     if (!birthData) return;
     // ISO YYYY-MM-DD for cache key — toDateString() is locale-sensitive and
@@ -159,9 +185,27 @@ export default function HomeScreen() {
     _dailyReadingInFlight = (async () => {
       try {
         const raw = await getDailyReading(birthData, chart);
-        const reading = stripMarkdown(raw);
-        setDailyReading(reading);
-        _dailyReadingCache = { date: todayKey, userKey: key, text: reading };
+        // Split the response into prose + structured life-area block, then
+        // strip markdown from each piece so an accidental ** in the model's
+        // output doesn't render as raw asterisks.
+        const parsed = parseReadingResponse(raw);
+        const reading = stripMarkdown(parsed.prose);
+        const cleanedAreas = parsed.lifeAreas
+          ? {
+              work: stripMarkdown(parsed.lifeAreas.work),
+              love: stripMarkdown(parsed.lifeAreas.love),
+              health: stripMarkdown(parsed.lifeAreas.health),
+              inner: stripMarkdown(parsed.lifeAreas.inner),
+            }
+          : null;
+        // Cache survives unmount, so set it unconditionally. Local state
+        // only fires if the component is still mounted — otherwise React
+        // warns and we'd see noise in Sentry.
+        _dailyReadingCache = { date: todayKey, userKey: key, text: reading, lifeAreas: cleanedAreas };
+        if (mountedRef.current) {
+          setDailyReading(reading);
+          setLifeAreas(cleanedAreas);
+        }
 
         // Persist to history — dedupe so refresh doesn't pile up records for the same day.
         const isoDate = todayKey;
@@ -169,6 +213,10 @@ export default function HomeScreen() {
         if (!alreadyToday) {
           const activeMahadasha = findActiveDasha(chart?.dashas);
           const activeAntardasha = findActiveAntardasha(activeMahadasha?.antardasha);
+          // Compose themed tag from deterministic signals so the archive shows
+          // a one-word badge ("Full moon", "Saturn chapter") instead of a
+          // generic dasha label that all entries share.
+          const composition = composeReadingContext(chart, new Date());
           addDaily({
             date: isoDate,
             notification: reading.slice(0, 100),
@@ -178,15 +226,18 @@ export default function HomeScreen() {
             lunarPhase: computeLunarPhase(new Date()),
             mahadasha: activeMahadasha?.planet ?? 'Sun',
             antardasha: activeAntardasha?.planet ?? null,
-            isQuietDay: false,
+            isQuietDay: composition.signals.isQuietDay,
             isDeepDay: false,
             hasCallback: false,
+            themeTag: composition.themeTag,
           });
         }
       } catch (e: any) {
-        setDailyReading(`Unable to get reading: ${e?.message ?? 'Please try again shortly.'}`);
+        if (mountedRef.current) {
+          setDailyReading(`Unable to get reading: ${e?.message ?? 'Please try again shortly.'}`);
+        }
       } finally {
-        setLoadingReading(false);
+        if (mountedRef.current) setLoadingReading(false);
         _dailyReadingInFlight = null;
       }
     })();
@@ -201,10 +252,43 @@ export default function HomeScreen() {
 
   useEffect(() => { fetchDailyReading(); }, [fetchDailyReading]);
 
+  // App-open streak — visible badge + milestone unlocks. Read currentStreak
+  // separately from recordOpen so the badge re-renders the moment a tick
+  // bumps it.
+  const recordOpen = useAppOpenStreakStore(s => s.recordOpen);
+  const acknowledgeMilestone = useAppOpenStreakStore(s => s.acknowledgeMilestone);
+  const currentStreak = useAppOpenStreakStore(s => s.currentStreak);
+  const longestStreak = useAppOpenStreakStore(s => s.longestStreak);
+  const [milestoneReached, setMilestoneReached] = useState<number | null>(null);
+
   // Bump the focus tick whenever the user returns to this tab. Time-derived UI
   // (greeting, date, lunar phase, affirmation, active dasha) re-evaluates so
-  // the screen stays correct after a midnight or noon boundary.
-  useFocusEffect(useCallback(() => { setNowTick(Date.now()); }, []));
+  // the screen stays correct after a midnight or noon boundary. We also tick
+  // the app-open streak here — focus on the home tab is the qualifying signal
+  // for "the user came back today." Idempotent per calendar day; only the
+  // first focus on a new day actually advances the counter.
+  //
+  // The streak tick is gated on:
+  //   (a) `hasHydrated` — on cold boot, the persisted user store hydrates
+  //       async; if focus fires before hydration completes, birthData
+  //       reads as null and the tick is skipped — the user silently
+  //       loses that day's streak. Deferring until hydration completes
+  //       fixes this. Once hasHydrated flips true, useCallback re-runs
+  //       and useFocusEffect re-fires the callback.
+  //   (b) `birthData` being set — pre-onboarding opens ("complete your
+  //       birth details" state) don't accrue toward the streak.
+  //       Otherwise a user who installs and never engages could hit a
+  //       7-day milestone modal without ever having read a reading. The
+  //       first tick after onboarding fires when the home screen
+  //       regains focus on return from the onboarding flow.
+  useFocusEffect(useCallback(() => {
+    setNowTick(Date.now());
+    if (!hasHydrated || !birthData) return;
+    const result = recordOpen();
+    if (result.newMilestone !== null) {
+      setMilestoneReached(result.newMilestone);
+    }
+  }, [recordOpen, birthData, hasHydrated]));
 
   // Tab focus alone misses the case where the user keeps the home tab in
   // foreground and the app goes idle / backgrounds across midnight. Without
@@ -250,26 +334,113 @@ export default function HomeScreen() {
         <SafeAreaView style={styles.modalSheet}>
           <View style={styles.modalSheetHeader}>
             <Text style={styles.modalSheetTitle}>{archivedRecord ? 'Reading from ' + formatArchiveDate(archivedRecord.date) : "Today's Cosmic Reading"}</Text>
-            <TouchableOpacity onPress={() => { setShowReadingModal(false); setArchivedRecord(null); }} style={styles.modalSheetClose}>
+            <TouchableOpacity
+              onPress={() => { setShowReadingModal(false); setArchivedRecord(null); }}
+              style={styles.modalSheetClose}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Close cosmic reading"
+              accessibilityRole="button"
+            >
               <Text style={styles.modalSheetCloseText}>✕</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.modalSheetActions}>
-            <DailyShareButton
-              reading={archivedRecord?.expanded ?? dailyReading}
-              lunarPhase={(archivedRecord?.lunarPhase as any) ?? todayLunarPhase}
-              mahadasha={archivedRecord?.mahadasha ?? activeDasha?.planet ?? 'Sun'}
-              isQuietDay={archivedRecord?.isQuietDay ?? false}
-            />
+            <View style={styles.modalSheetActionsLeft}>
+              <DailyShareButton
+                reading={archivedRecord?.expanded ?? dailyReading}
+                lunarPhase={(archivedRecord?.lunarPhase as any) ?? todayLunarPhase}
+                mahadasha={archivedRecord?.mahadasha ?? activeDasha?.planet ?? 'Sun'}
+                isQuietDay={archivedRecord?.isQuietDay ?? false}
+              />
+              <DailyReadingAudioButton
+                reading={archivedRecord?.expanded ?? dailyReading}
+                isPremium={isPremium}
+                active={showReadingModal}
+              />
+            </View>
             {!archivedRecord && (
-              <TouchableOpacity style={styles.modalSheetRefresh} onPress={() => { setShowReadingModal(false); fetchDailyReading(true); }}>
-                <Text style={styles.modalSheetRefreshText}>↻ Refresh</Text>
+              <TouchableOpacity
+                style={styles.modalSheetRefresh}
+                // Refresh in-place: keep the modal open and let the
+                // reading state transition to the loading view. Closing
+                // the modal here used to drop the user back to the
+                // preview card — a UX regression that made Refresh feel
+                // like "dismiss."
+                onPress={() => fetchDailyReading(true)}
+                disabled={loadingReading}
+              >
+                {loadingReading ? (
+                  <ActivityIndicator color={Colors.gold} size="small" />
+                ) : (
+                  <Text style={styles.modalSheetRefreshText}>↻ Refresh</Text>
+                )}
               </TouchableOpacity>
             )}
           </View>
           <ScrollView style={styles.modalSheetBody} showsVerticalScrollIndicator={false}>
             <Text style={styles.modalSheetDate}>{archivedRecord ? formatArchiveDate(archivedRecord.date) : dateStr}</Text>
+
+            {/* Signal chips — provenance receipts shown above the prose so the
+                reading doesn't feel like opaque AI output. Hidden on archived
+                records (the composition reflects today's date, not theirs). */}
+            {!archivedRecord && composition.chips.length > 0 && (
+              <View style={styles.chipRow}>
+                {composition.chips.map((chip, i) => (
+                  <View
+                    key={`chip-${i}`}
+                    style={[styles.chip, chip.isNew && styles.chipNew]}
+                  >
+                    {chip.isNew && <Text style={styles.chipNewDot}>✦</Text>}
+                    <Text style={styles.chipText}>{chip.label}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
             <Text style={styles.modalSheetContent}>{archivedRecord?.expanded ?? dailyReading}</Text>
+
+            {/* Life-area breakdown — parsed from the Claude response. Renders
+                only for today's reading (archived records were generated
+                before the structured block existed). */}
+            {!archivedRecord && lifeAreas && (
+              <View style={styles.lifeAreasSection}>
+                <Text style={styles.modalSheetSectionTitle}>TODAY ACROSS YOUR LIFE</Text>
+                <LifeAreaRow label="Work" body={lifeAreas.work} accent={Colors.gold} />
+                <LifeAreaRow label="Love" body={lifeAreas.love} accent={Colors.rose} />
+                <LifeAreaRow label="Health" body={lifeAreas.health} accent={Colors.emerald} />
+                <LifeAreaRow label="Inner" body={lifeAreas.inner} accent={Colors.violet} />
+              </View>
+            )}
+
+            {/* Provenance footer — single-line origin sentence so users can
+                see why the reading lands the way it does. */}
+            {!archivedRecord && composition.provenance && (
+              <Text style={styles.provenanceLine}>{composition.provenance}</Text>
+            )}
+
+            {/* Tomorrow's flavor peek — retention hook. Deterministic from
+                tomorrow's signals (lunar event > dasha shift > weekday). */}
+            {!archivedRecord && composition.tomorrowPeek && (
+              <View style={styles.tomorrowBox}>
+                <Text style={styles.tomorrowLabel}>A LOOK AHEAD</Text>
+                <Text style={styles.tomorrowText}>{composition.tomorrowPeek}</Text>
+              </View>
+            )}
+
+            {/* Journal prompts — two reflection questions derived from the
+                active dasha and lunar phase. */}
+            {!archivedRecord && composition.journalPrompts.length > 0 && (
+              <View style={styles.journalSection}>
+                <Text style={styles.modalSheetSectionTitle}>SIT WITH THIS</Text>
+                {composition.journalPrompts.map((p, i) => (
+                  <View key={`jp-${i}`} style={styles.journalRow}>
+                    <Text style={styles.journalMark}>·</Text>
+                    <Text style={styles.journalText}>{p}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
             <AskGuruButton
               seed={archivedRecord ? `I'm looking back at my cosmic reading from ${formatArchiveDate(archivedRecord.date)}. Help me understand ` : "I just read today's cosmic reading. Help me understand "}
               onClose={() => { setShowReadingModal(false); setArchivedRecord(null); }}
@@ -292,7 +463,13 @@ export default function HomeScreen() {
         <SafeAreaView style={styles.affirmationModalContainer}>
           <View style={styles.affirmationModalHeader}>
             <Text style={styles.affirmationModalTitle}>Today's Affirmation</Text>
-            <TouchableOpacity onPress={() => setShowAffirmationModal(false)} style={styles.affirmationModalClose}>
+            <TouchableOpacity
+              onPress={() => setShowAffirmationModal(false)}
+              style={styles.affirmationModalClose}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Close affirmation"
+              accessibilityRole="button"
+            >
               <Text style={styles.affirmationModalCloseText}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -332,20 +509,69 @@ export default function HomeScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* One-time AI disclosure modal */}
+      {/* Streak milestone celebration — fires once per fresh milestone.
+          The streak store guarantees each milestone is surfaced at most
+          once, so this modal won't re-appear on a future open at the
+          same streak value. */}
+      <Modal
+        // Defensively gate on milestone ≥ 7. The store only emits values
+        // from STREAK_MILESTONES (the smallest being 7), but if a future
+        // change adds a smaller milestone without copy support, we'd
+        // render an empty body under a "X Day Streak" title.
+        visible={milestoneReached !== null && milestoneReached >= 7}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.milestoneSparkle}>✦</Text>
+            <Text style={styles.modalTitle}>{milestoneReached ?? ''} Day Streak</Text>
+            <Text style={styles.modalBody}>
+              {milestoneReached
+                ? `You've shown up for ${milestoneReached} days in a row. ${
+                    guruBonusForStreak(milestoneReached) > 0
+                      ? `As a small thank-you, you've unlocked ${guruBonusForStreak(milestoneReached)} bonus Guru question${guruBonusForStreak(milestoneReached) > 1 ? 's' : ''} per day while you keep this streak going.`
+                      : 'A daily ritual is quietly becoming part of how you live. Keep going.'
+                  }`
+                : ''}
+            </Text>
+            <TouchableOpacity
+              style={styles.modalAccept}
+              onPress={() => {
+                if (milestoneReached !== null) acknowledgeMilestone(milestoneReached);
+                setMilestoneReached(null);
+              }}
+              accessibilityLabel="Acknowledge milestone and continue"
+            >
+              <Text style={styles.modalAcceptText}>Keep Going ✦</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* One-time AI disclosure modal. Body is wrapped in a ScrollView
+          with maxHeight so the disclosure text (long after the audit
+          expansion) doesn't push the "Got It" button off-screen on small
+          devices like iPhone SE. */}
       <Modal visible={showAIDisclosure} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>About AI in Naksha</Text>
-            <Text style={styles.modalBody}>
-              Naksha uses <Text style={styles.modalBold}>Claude AI by Anthropic</Text> to generate two types of content:{'\n\n'}
-              <Text style={styles.modalBold}>• Daily cosmic readings</Text> — generated from your birth data and today's date.{'\n'}
-              <Text style={styles.modalBold}>• Guru responses</Text> — generated from your chart and the questions you ask.{'\n\n'}
-              <Text style={styles.modalBold}>Your planetary positions and chart calculations</Text> are computed mathematically using classical Vedic ephemeris — not AI.{'\n\n'}
-              <Text style={styles.modalBold}>What is sent to Anthropic:</Text> your name, birth date, birth place, chart data, and Guru questions.{'\n\n'}
-              <Text style={styles.modalBold}>What is NOT sent:</Text> device identifiers, contacts, photos, or any other personal data.{'\n\n'}
-              The AI draws on classical Vedic texts, Jyotish tradition, and established astrological research — the sources are recognised and valid. Readings are for spiritual reflection only and do not constitute medical, legal, financial, or mental health advice.
-            </Text>
+            <ScrollView
+              style={styles.modalBodyScroll}
+              contentContainerStyle={{ paddingBottom: Spacing.sm }}
+              showsVerticalScrollIndicator={true}
+            >
+              <Text style={styles.modalBody}>
+                Naksha uses <Text style={styles.modalBold}>Claude AI by Anthropic</Text> to generate the narrative content across the app — daily readings, Guru responses, palm and palmistry analysis, compatibility readings, tarot reflections, and the persona / arc / memory summaries that let the Guru remember context across sessions.{'\n\n'}
+                <Text style={styles.modalBold}>Your planetary positions and chart calculations</Text> are computed mathematically using classical Vedic ephemeris — not AI.{'\n\n'}
+                <Text style={styles.modalBold}>What is sent to Anthropic:</Text> your name, birth date, birth place, computed chart data, Guru questions and recent conversation history, palm photos (when you use palmistry), partner's name + birth details (when you run a compatibility reading), tarot draws + your free-text question, and derived persona / memory summaries.{'\n\n'}
+                <Text style={styles.modalBold}>What is NOT sent to AI:</Text> contacts, photos from your library other than the palm photo you choose, location beyond the city you typed at onboarding, or any other personal data.{'\n\n'}
+                <Text style={styles.modalBold}>Device identifier:</Text> a random ID is generated on first launch and sent only to our own backend for rate-limiting and abuse prevention. It is never sent to Anthropic or any third party.{'\n\n'}
+                <Text style={styles.modalBold}>City geocoding:</Text> the city you type at onboarding is looked up via OpenStreetMap's public Nominatim service to get coordinates for chart math. Nothing else about you is sent there.{'\n\n'}
+                The AI draws on classical Vedic texts, Jyotish tradition, and established astrological research — the sources are recognised and valid. Readings are for spiritual reflection only and do not constitute medical, legal, financial, or mental health advice.
+              </Text>
+            </ScrollView>
             <TouchableOpacity
               style={styles.modalAccept}
               onPress={() => { acknowledgeAIDisclosure(); setShowAIDisclosure(false); }}
@@ -362,13 +588,28 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>{greeting}</Text>
             <Text style={styles.name}>{firstName}</Text>
             <Text style={styles.date}>{dateStr}</Text>
+            {/* Visible streak badge — shown from day 2 so day-1 users
+                aren't pressured by a "1 day streak" reminder. */}
+            {currentStreak >= 2 && (
+              <View style={styles.streakChipRow}>
+                <Text style={styles.streakChipText}>
+                  ✦ {currentStreak} day streak
+                  {longestStreak > currentStreak ? `  ·  best ${longestStreak}` : ''}
+                </Text>
+              </View>
+            )}
           </View>
           {!isPremium && (
-            <TouchableOpacity style={styles.premiumBadge} onPress={() => router.push('/paywall')}>
+            <TouchableOpacity
+              style={styles.premiumBadge}
+              onPress={() => router.push('/paywall')}
+              accessibilityLabel="Go premium"
+              accessibilityRole="button"
+            >
               <Text style={styles.premiumBadgeText}>✦ GO PREMIUM</Text>
             </TouchableOpacity>
           )}
@@ -432,7 +673,7 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Daily Reading — preview card, tap to expand */}
+        {/* Daily Reading — preview card, tap to expand. */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>TODAY'S COSMIC READING</Text>
           <TouchableOpacity
@@ -460,6 +701,7 @@ export default function HomeScreen() {
               </>
             )}
           </TouchableOpacity>
+
         </View>
 
         {/* Recent Readings — past entries, tap to re-read */}
@@ -472,10 +714,17 @@ export default function HomeScreen() {
                 style={styles.archiveItem}
                 onPress={() => { setArchivedRecord(rec); setShowReadingModal(true); }}
                 activeOpacity={0.7}
+                accessibilityLabel={`Open reading from ${formatArchiveDate(rec.date)}, ${rec.themeTag ?? rec.mahadasha + ' chapter'}`}
+                accessibilityRole="button"
               >
                 <View style={styles.archiveRow}>
                   <Text style={styles.archiveDate}>{formatArchiveDate(rec.date)}</Text>
-                  <Text style={styles.archiveDasha}>{rec.mahadasha}</Text>
+                  {/* Themed pill if the record was written after themeTag was added,
+                      otherwise fall back to the older mahadasha label so legacy
+                      records don't show an empty slot. */}
+                  <View style={styles.archiveTag}>
+                    <Text style={styles.archiveTagText}>{rec.themeTag ?? `${rec.mahadasha} chapter`}</Text>
+                  </View>
                 </View>
                 <Text style={styles.archivePreview} numberOfLines={2}>{rec.notification || rec.card}</Text>
               </TouchableOpacity>
@@ -530,9 +779,25 @@ const StatCard = memo(function StatCard({ label, value, sub }: { label: string; 
   );
 });
 
+const LifeAreaRow = memo(function LifeAreaRow({ label, body, accent }: { label: string; body: string; accent: string }) {
+  return (
+    <View style={styles.lifeAreaRow}>
+      <View style={[styles.lifeAreaLabelWrap, { borderLeftColor: accent }]}>
+        <Text style={[styles.lifeAreaLabel, { color: accent }]}>{label}</Text>
+      </View>
+      <Text style={styles.lifeAreaBody}>{body}</Text>
+    </View>
+  );
+});
+
 const QuickAction = memo(function QuickAction({ icon, label, color, onPress, locked }: { icon: string; label: string; color: string; onPress: () => void; locked: boolean }) {
   return (
-    <TouchableOpacity style={styles.quickAction} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.quickAction}
+      onPress={onPress}
+      accessibilityLabel={locked ? `${label} (premium feature)` : label}
+      accessibilityRole="button"
+    >
       <View style={[styles.quickIconWrap, { backgroundColor: color + '18' }]}>
         <Text style={styles.quickIcon}>{icon}</Text>
       </View>
@@ -611,6 +876,7 @@ const styles = StyleSheet.create({
   modalSheetDate: { fontSize: 11, letterSpacing: 1.5, color: Colors.muted, fontFamily: Fonts.cinzel, marginBottom: 16, textTransform: 'uppercase' },
   modalSheetContent: { fontSize: 16, lineHeight: 28, color: Colors.star, fontFamily: Fonts.crimson },
   modalSheetActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  modalSheetActionsLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   modalSheetRefresh: { paddingVertical: Spacing.sm },
   modalSheetRefreshText: { fontSize: 12, color: Colors.muted, fontFamily: Fonts.cinzel },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -623,7 +889,105 @@ const styles = StyleSheet.create({
   modalCard: { backgroundColor: '#0D1220', borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: Radius.xl, padding: Spacing.lg, width: '100%', maxWidth: 420 },
   modalTitle: { fontSize: 18, fontFamily: Fonts.cinzel, color: Colors.gold, textAlign: 'center', marginBottom: Spacing.md },
   modalBody: { fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 22, marginBottom: Spacing.lg },
+  // Cap the disclosure body height so on small phones the long text
+  // scrolls inside the card and the Accept button stays visible.
+  modalBodyScroll: { maxHeight: 480, marginBottom: Spacing.md },
   modalBold: { fontFamily: Fonts.cinzelBold, color: Colors.gold },
   modalAccept: { backgroundColor: Colors.gold, borderRadius: Radius.lg, padding: 16, alignItems: 'center' },
   modalAcceptText: { fontSize: 14, fontFamily: Fonts.cinzel, color: Colors.midnight, letterSpacing: 0.5 },
+
+  // ─── Signal chips (above prose) ────────────────────────────────────
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.goldDim,
+    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: Radius.full,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  chipNew: { borderColor: Colors.gold, backgroundColor: 'rgba(201,168,76,0.22)' },
+  chipNewDot: { fontSize: 9, color: Colors.gold },
+  chipText: { fontSize: 11, color: Colors.star, fontFamily: Fonts.cinzel, letterSpacing: 0.3 },
+
+  // ─── Life areas (parsed from Claude response) ──────────────────────
+  lifeAreasSection: { marginTop: Spacing.lg },
+  modalSheetSectionTitle: {
+    fontSize: 11, letterSpacing: 2, color: Colors.gold,
+    fontFamily: Fonts.cinzel, marginBottom: 12,
+  },
+  lifeAreaRow: { flexDirection: 'row', marginBottom: 14, alignItems: 'flex-start' },
+  lifeAreaLabelWrap: {
+    borderLeftWidth: 2, paddingLeft: 8, marginRight: 10,
+    minWidth: 64,
+  },
+  lifeAreaLabel: {
+    fontSize: 10, letterSpacing: 1.5, fontFamily: Fonts.cinzel,
+    textTransform: 'uppercase',
+  },
+  lifeAreaBody: {
+    flex: 1, fontSize: 14, color: Colors.star,
+    fontFamily: Fonts.crimson, lineHeight: 22,
+  },
+
+  // ─── Provenance footer ─────────────────────────────────────────────
+  provenanceLine: {
+    fontSize: 12, color: Colors.muted, fontFamily: Fonts.cormorantItalic,
+    lineHeight: 18, marginTop: Spacing.lg, opacity: 0.85,
+  },
+
+  // ─── Tomorrow's flavor peek ────────────────────────────────────────
+  tomorrowBox: {
+    marginTop: Spacing.lg,
+    backgroundColor: 'rgba(201,168,76,0.06)',
+    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: Radius.md, padding: 12,
+  },
+  tomorrowLabel: {
+    fontSize: 10, letterSpacing: 2, color: Colors.gold,
+    fontFamily: Fonts.cinzel, marginBottom: 6,
+  },
+  tomorrowText: {
+    fontSize: 14, color: Colors.star, fontFamily: Fonts.crimson, lineHeight: 21,
+  },
+
+  // ─── Journal prompts ───────────────────────────────────────────────
+  journalSection: { marginTop: Spacing.lg },
+  journalRow: { flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'flex-start' },
+  journalMark: {
+    fontSize: 18, color: Colors.gold, fontFamily: Fonts.cinzel,
+    lineHeight: 22, marginTop: -2,
+  },
+  journalText: {
+    flex: 1, fontSize: 14, color: Colors.star,
+    fontFamily: Fonts.cormorantItalic, lineHeight: 22,
+  },
+
+  // ─── Streak badge + milestone ──────────────────────────────────────
+  streakChipRow: {
+    flexDirection: 'row', alignSelf: 'flex-start',
+    marginTop: 6,
+    backgroundColor: Colors.goldDim,
+    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: Radius.full,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  streakChipText: {
+    fontSize: 10, letterSpacing: 0.8, color: Colors.gold,
+    fontFamily: Fonts.cinzel, textTransform: 'uppercase',
+  },
+  milestoneSparkle: {
+    fontSize: 36, color: Colors.gold, textAlign: 'center', marginBottom: Spacing.sm,
+  },
+
+  // ─── Archive theme tag pill ────────────────────────────────────────
+  archiveTag: {
+    backgroundColor: Colors.goldDim,
+    borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: Radius.full,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  archiveTagText: {
+    fontSize: 9, letterSpacing: 0.8, color: Colors.gold,
+    fontFamily: Fonts.cinzel, textTransform: 'uppercase',
+  },
 });

@@ -149,6 +149,19 @@ export const SUBSCRIPTION_PRODUCTS = {
 
 export const FREE_GURU_QUESTIONS_PER_DAY = 2;
 
+/**
+ * Hard cap on the number of saved family/partner charts a user can keep.
+ * AsyncStorage on iOS is bounded (~6 MB default); without a cap, a
+ * power user adding charts indefinitely would eventually blow past it
+ * and persist hydration would fail. 20 covers any reasonable family
+ * tree (self + spouse + kids + parents + in-laws + siblings) with
+ * comfortable headroom.
+ *
+ * Enforced via FIFO eviction in `addSavedChart` — the oldest entry is
+ * dropped when adding a new chart would exceed the cap.
+ */
+export const SAVED_CHARTS_MAX = 20;
+
 export const PLANETS_BY_ID: Map<string, typeof PLANETS[number]> = new Map(
   PLANETS.map(p => [p.id, p])
 );

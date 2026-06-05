@@ -35,6 +35,20 @@ const TextAny = Text as any;
 TextAny.defaultProps = TextAny.defaultProps || {};
 TextAny.defaultProps.maxFontSizeMultiplier = 1.5;
 
+/**
+ * Sanitize a persisted fontScale value. Guards against:
+ *   - `NaN` / `Infinity` / `undefined` / `null` — falls back to 1
+ *   - Negative or zero values — would invert or zero out text
+ *   - Excessively large values from a corrupted migration — capped at 2
+ *
+ * Without this, a malformed persist blob could multiply every fontSize
+ * in the app by 0 (invisible text) or a negative number (layout chaos).
+ */
+function sanitizeScale(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) return 1;
+  return Math.min(raw, 2);
+}
+
 // Module-level cache of the current scale. `useAppStore.getState()` was
 // being called inside every Text.render — fast, but at default Large
 // (1.15) every Text in the app goes through the clone path so this fires
@@ -46,7 +60,7 @@ TextAny.defaultProps.maxFontSizeMultiplier = 1.5;
 // so the listener is hit on every setUser / setChart / setBirthData /
 // reading save. The early-out below makes the no-op case cost nothing
 // beyond a property read + comparison.
-let _currentScale = useAppStore.getState().user.fontScale ?? 1;
+let _currentScale = sanitizeScale(useAppStore.getState().user.fontScale);
 // Guard against re-subscribing on hot reload in dev — without this,
 // every fast-refresh re-evaluates this module and adds another listener,
 // so after a few iterations the same scale-update fires N times per
@@ -56,7 +70,7 @@ const _storeAny = useAppStore as unknown as { __naksha_textScale_subscribed?: bo
 if (!_storeAny.__naksha_textScale_subscribed) {
   _storeAny.__naksha_textScale_subscribed = true;
   useAppStore.subscribe((state) => {
-    const next = state.user.fontScale ?? 1;
+    const next = sanitizeScale(state.user.fontScale);
     if (next !== _currentScale) _currentScale = next;
   });
 }

@@ -76,7 +76,12 @@ export default function NumerologyScreen() {
     const soulUrgeNumber = calculateSoulUrge(name);
     const rawBirthday = new Date(user.birthData.dateOfBirth).getUTCDate();
     let birthdayNumber = rawBirthday;
-    while (birthdayNumber > 9 && birthdayNumber !== 11 && birthdayNumber !== 22) {
+    // Preserve master numbers 11, 22, AND 33 — consistent with the other
+    // numerology calculators in src/utils/vedic.ts (life path, destiny,
+    // soul urge, personality). Previously this loop only preserved 11/22,
+    // so a birthday reducing to 33 (impossible for DOB but kept for
+    // structural consistency if logic is reused) would collapse to 6.
+    while (birthdayNumber > 9 && birthdayNumber !== 11 && birthdayNumber !== 22 && birthdayNumber !== 33) {
       birthdayNumber = birthdayNumber.toString().split('').map(Number).reduce((a, b) => a + b, 0);
     }
     const personalityNumber = calculatePersonalityNumber(name);

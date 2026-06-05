@@ -104,9 +104,10 @@ describe('buildShareMoment', () => {
     expect(moment.dateLabel).toMatch(/April 30/);
   });
 
-  it('attribution is the app tagline', () => {
+  it('attribution carries app tagline and AI-generated disclosure', () => {
     const moment = buildShareMoment(reading, ctx);
-    expect(moment.attribution).toBe('— naksha · vedic astrology');
+    expect(moment.attribution).toContain('naksha');
+    expect(moment.attribution).toContain('AI-assisted');
   });
 
   it('fullText includes quote in quotes, contextLine, dateLabel and attribution', () => {

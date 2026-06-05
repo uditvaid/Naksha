@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ExpoCrypto from 'expo-crypto';
-import { FREE_GURU_QUESTIONS_PER_DAY } from '../constants/astrology';
+import { FREE_GURU_QUESTIONS_PER_DAY, SAVED_CHARTS_MAX } from '../constants/astrology';
 import { READINGS_RETENTION_DAYS } from './dailyContinuityStore';
 import { fireAppReset } from './appReset';
+import { useAppOpenStreakStore, guruBonusForStreak } from './appOpenStreakStore';
 
 // Re-export onAppReset from the dependency-free registry so existing
 // callers (`import { onAppReset } from '@store/userStore'`) keep working.
@@ -134,6 +135,12 @@ interface AppState {
   guruMessages: GuruMessage[];
   isLoading: boolean;
   pendingGuruContext: string | null;
+  /** False during cold boot until zustand persist finishes reading from
+   *  AsyncStorage. Used by app/index.tsx to defer the initial route
+   *  decision so a returning user doesn't briefly flash through
+   *  /onboarding before hydration lands. */
+  _hasHydrated: boolean;
+  _setHasHydrated: (v: boolean) => void;
   setUser: (user: Partial<UserProfile>) => void;
   setBirthData: (data: BirthData) => void;
   setChart: (chart: ChartData) => void;
@@ -183,6 +190,8 @@ export const useAppStore = create<AppState>()(
       guruMessages: [],
       isLoading: false,
       pendingGuruContext: null,
+      _hasHydrated: false,
+      _setHasHydrated: (v) => set({ _hasHydrated: v }),
 
       setUser: (update) =>
         set((state) => ({ user: { ...state.user, ...update } })),
@@ -224,16 +233,31 @@ export const useAppStore = create<AppState>()(
         if (user.isPremium) return true;
         const today = new Date().toISOString().split('T')[0]!;
         if (user.lastGuruDate !== today) return true;
-        return user.guruQuestionsToday < FREE_GURU_QUESTIONS_PER_DAY;
+        // Streak bonus: long-running users get +1/+2/+3 free questions
+        // per day at the 7/30/100-day milestones. Read directly from the
+        // streak store — there's no circular import (streak store has
+        // zero deps on this one).
+        const bonus = guruBonusForStreak(useAppOpenStreakStore.getState().currentStreak);
+        return user.guruQuestionsToday < FREE_GURU_QUESTIONS_PER_DAY + bonus;
       },
 
       addSavedChart: (chart) =>
-        set((state) => ({
-          user: {
-            ...state.user,
-            savedCharts: [...state.user.savedCharts, chart],
-          },
-        })),
+        set((state) => {
+          // FIFO eviction: if adding this chart would exceed the cap,
+          // drop the oldest entries to make room. Important for keeping
+          // AsyncStorage under iOS's ~6 MB ceiling on long-lived users
+          // who build out an extended family tree.
+          const next = [...state.user.savedCharts, chart];
+          const trimmed = next.length > SAVED_CHARTS_MAX
+            ? next.slice(next.length - SAVED_CHARTS_MAX)
+            : next;
+          return {
+            user: {
+              ...state.user,
+              savedCharts: trimmed,
+            },
+          };
+        }),
 
       removeSavedChart: (id) =>
         set((state) => ({
@@ -285,6 +309,23 @@ export const useAppStore = create<AppState>()(
       setLoading: (loading) => set({ isLoading: loading }),
 
       reset: () => {
+        // ORDERING INVARIANT — do NOT swap these two lines.
+        //
+        // The local `set` MUST run before `fireAppReset` so the legacy
+        // `guruMessages` array is cleared in userStore's in-memory state
+        // BEFORE guruMessageStore's reset listener fires. Otherwise the
+        // sequence becomes:
+        //   1. fireAppReset → guruMessageStore.reset() (clears + marks
+        //      migrationCompleted=true)
+        //   2. set() clears legacy guruMessages
+        //
+        // The next time the migration runner evaluates (e.g. after a
+        // re-onboard later in the same session), it would see migration
+        // already completed and skip — but legacy was already cleared
+        // BEFORE migration could have happened, so functionally identical
+        // in THIS case. Still: keep the order so future schema additions
+        // (where legacy might carry meaningful state after fireAppReset)
+        // don't reintroduce a subtle migration race.
         set({ user: defaultUser, guruMessages: [] });
         fireAppReset();
       },
@@ -292,7 +333,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'nakshatra-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 8,
+      version: 9,
       migrate: (persistedState: any, version: number) => {
         let state = persistedState;
         if (version < 2 && state?.user && 'notificationsEnabled' in state.user) {
@@ -367,13 +408,38 @@ export const useAppStore = create<AppState>()(
             state = { ...state, user: { ...state.user, fontScaleExplicit: true } };
           }
         }
+        // v9: Guru chat transcript moved to its own AsyncStorage key
+        // (`naksha-guru-messages`) to stop every new Guru message from
+        // rewriting the chart + savedReadings + preferences blob — the
+        // single biggest persist write-hotspot in the app. We KEEP the
+        // legacy `guruMessages` array on hydrated state for one version
+        // so the migration runner in app/_layout.tsx can copy it over
+        // after both stores hydrate; the partialize below excludes it
+        // from future writes, so once migrated it disappears from disk.
+        // No transformation needed here — the migration is handled
+        // post-hydration by `migrateLegacyGuruMessages`.
         return state;
       },
       partialize: (state) => ({
         user: state.user,
-        guruMessages: state.guruMessages.slice(-50),
-        // pendingGuruContext is intentionally excluded — session-only
+        // guruMessages used to be persisted here, capped at 50. As of
+        // v9 they live in `guruMessageStore`; this field is intentionally
+        // omitted so each Guru turn no longer rewrites the entire user
+        // blob. The legacy field is preserved in IN-MEMORY state for the
+        // first launch after upgrade so the migration runner can copy
+        // it; subsequent launches won't see it because nothing persists
+        // it any more.
+        //
+        // pendingGuruContext is also intentionally excluded — session-only.
+        // _hasHydrated must NOT persist — runtime flag set by
+        // onRehydrateStorage below.
       }),
+      // Fires once the persisted state has been loaded from AsyncStorage
+      // (success or error). Sets _hasHydrated so app/index.tsx can defer
+      // the initial route decision until real user state is available.
+      onRehydrateStorage: () => (state) => {
+        state?._setHasHydrated(true);
+      },
     }
   )
 );

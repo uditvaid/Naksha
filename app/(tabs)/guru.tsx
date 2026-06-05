@@ -5,11 +5,13 @@ import * as Haptics from 'expo-haptics';
 import * as ExpoCrypto from 'expo-crypto';
 import { router } from 'expo-router';
 import { useAppStore, GuruMessage } from '@store/userStore';
+import { useGuruMessageStore } from '@store/guruMessageStore';
 import { useShallow } from 'zustand/react/shallow';
 import { askGuru } from '@services/claude';
 import { Colors, Fonts, Spacing, Radius } from '@constants/theme';
 import { FREE_GURU_QUESTIONS_PER_DAY } from '@constants/astrology';
 import { findActiveDasha } from '@utils/vedic';
+import { useAppOpenStreakStore, guruBonusForStreak } from '@store/appOpenStreakStore';
 
 const DASHA_QUESTIONS: Record<string, string[]> = {
   Sun: [
@@ -76,22 +78,24 @@ const genId = () => ExpoCrypto.randomUUID();
 
 export default function GuruScreen() {
   const {
-    birthData, chart, isPremium, guruQuestionsToday, lastGuruDate, messages, guruConsentGiven, pendingGuruContext,
+    birthData, chart, isPremium, guruQuestionsToday, lastGuruDate, guruConsentGiven, pendingGuruContext,
   } = useAppStore(useShallow(s => ({
     birthData: s.user.birthData,
     chart: s.user.chart,
     isPremium: s.user.isPremium,
     guruQuestionsToday: s.user.guruQuestionsToday,
     lastGuruDate: s.user.lastGuruDate,
-    messages: s.guruMessages,
     guruConsentGiven: s.user.guruConsentGiven,
     pendingGuruContext: s.pendingGuruContext,
   })));
-  const addMessage = useAppStore(s => s.addGuruMessage);
+  // Messages now live in their own store so adding one doesn't rewrite
+  // the chart + savedReadings blob on every Guru turn.
+  const messages = useGuruMessageStore(s => s.messages);
+  const addMessage = useGuruMessageStore(s => s.addMessage);
+  const clearMessages = useGuruMessageStore(s => s.clearMessages);
   const incrementQuestions = useAppStore(s => s.incrementGuruQuestions);
   const canAsk = useAppStore(s => s.canAskGuru);
   const saveReading = useAppStore(s => s.saveReading);
-  const clearMessages = useAppStore(s => s.clearGuruMessages);
   const giveGuruConsent = useAppStore(s => s.giveGuruConsent);
   const setPendingGuruContext = useAppStore(s => s.setPendingGuruContext);
 
@@ -100,6 +104,16 @@ export default function GuruScreen() {
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const scrollRef = useRef<FlatList<GuruMessage>>(null);
+  // Mounted guard: askGuru can run for 30s. If the user navigates away
+  // mid-call, the post-await setLoading + scrollToEnd run on an unmounted
+  // component and React 18 logs a warning. The store mutations
+  // (addMessage / incrementQuestions / saveReading) are safe — they
+  // target Zustand, not local state — but the local setLoading isn't.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Pre-fill input when arriving from chart screen via "Ask Guru"
   useEffect(() => {
@@ -109,9 +123,15 @@ export default function GuruScreen() {
     }
   }, [pendingGuruContext]);
 
+  // Streak bonus mirrors the read in userStore.canAskGuru — surface it
+  // in the visible counter so a user with a 7+ day streak actually sees
+  // the extra question(s) they've earned rather than being capped at
+  // the base FREE_GURU_QUESTIONS_PER_DAY in the UI.
+  const currentStreak = useAppOpenStreakStore(s => s.currentStreak);
+  const guruBonus = guruBonusForStreak(currentStreak);
   const questionsLeft = isPremium
     ? '∞'
-    : Math.max(0, FREE_GURU_QUESTIONS_PER_DAY - (lastGuruDate === new Date().toISOString().split('T')[0] ? guruQuestionsToday : 0));
+    : Math.max(0, (FREE_GURU_QUESTIONS_PER_DAY + guruBonus) - (lastGuruDate === new Date().toISOString().split('T')[0] ? guruQuestionsToday : 0));
 
   const sendMessage = useCallback(async (text?: string) => {
     const question = (text ?? input).trim();
@@ -149,7 +169,7 @@ export default function GuruScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const currentMessages = useAppStore.getState().guruMessages;
+      const currentMessages = useGuruMessageStore.getState().messages;
       const response = await askGuru(question, currentMessages, birthData, chart);
       incrementQuestions();
       addMessage({
@@ -166,6 +186,8 @@ export default function GuruScreen() {
         question,
       });
     } catch (e) {
+      // The store mutation is safe even if unmounted; only the local
+      // UI state needs the mounted guard.
       addMessage({
         id: genId(),
         role: 'assistant',
@@ -173,8 +195,10 @@ export default function GuruScreen() {
         timestamp: new Date().toISOString(),
       });
     } finally {
-      setLoading(false);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
+      if (mountedRef.current) {
+        setLoading(false);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
+      }
     }
   }, [input, loading, birthData, chart, canAsk, guruConsentGiven]);
 
@@ -196,7 +220,7 @@ export default function GuruScreen() {
       setLoading(true);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
       try {
-        const currentMessages = useAppStore.getState().guruMessages;
+        const currentMessages = useGuruMessageStore.getState().messages;
         const response = await askGuru(q, currentMessages, birthData!, chart);
         incrementQuestions();
         addMessage({
@@ -301,6 +325,9 @@ export default function GuruScreen() {
             style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
             onPress={() => sendMessage()}
             disabled={!input.trim() || loading}
+            accessibilityLabel={loading ? 'Sending your question to the Guru' : 'Send question to the Guru'}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !input.trim() || loading, busy: loading }}
           >
             <Text style={styles.sendBtnText}>✦</Text>
           </TouchableOpacity>
@@ -320,10 +347,20 @@ export default function GuruScreen() {
             <Text style={styles.modalBody}>
               The Guru uses <Text style={styles.modalBold}>Claude AI by Anthropic</Text>. Your name, birth date, birth place, chart data, and questions are sent to generate responses. No other personal data is shared.
             </Text>
-            <TouchableOpacity style={styles.modalAccept} onPress={handleConsentAccept}>
+            <TouchableOpacity
+              style={styles.modalAccept}
+              onPress={handleConsentAccept}
+              accessibilityLabel="Accept Guru AI consent and continue"
+              accessibilityRole="button"
+            >
               <Text style={styles.modalAcceptText}>Got It — Continue ✦</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.modalDecline} onPress={() => { setShowConsentModal(false); setPendingQuestion(null); }}>
+            <TouchableOpacity
+              style={styles.modalDecline}
+              onPress={() => { setShowConsentModal(false); setPendingQuestion(null); }}
+              accessibilityLabel="Cancel and dismiss Guru consent"
+              accessibilityRole="button"
+            >
               <Text style={styles.modalDeclineText}>Cancel</Text>
             </TouchableOpacity>
           </View>

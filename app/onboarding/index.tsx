@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Dimensions, Platform, ActivityIndicator, Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import Svg, { Circle, Line, Text as SvgText, Path, G } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -339,6 +340,16 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* KeyboardAvoidingView wraps the horizontal pager so the Name input
+          (step 1) and the Place autocomplete input (step 3) stay visible
+          above the keyboard on small phones. Without this, the Next button
+          can be buried by the keyboard. iOS uses 'padding' behavior, which
+          shrinks the container; Android handles it via windowSoftInputMode
+          configured in the manifest. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       {/* Progress bar */}
       {step > 0 && step < 5 && (
         <View style={styles.progressBar}>
@@ -681,6 +692,7 @@ export default function OnboardingScreen() {
           )}
         </View>
       )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

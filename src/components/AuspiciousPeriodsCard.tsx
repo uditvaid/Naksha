@@ -76,7 +76,13 @@ export function AuspiciousPeriodsCard({ birthData, nowTick }: Props) {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Today's Time Windows</Text>
-            <TouchableOpacity onPress={() => setOpen(false)} style={styles.modalClose}>
+            <TouchableOpacity
+              onPress={() => setOpen(false)}
+              style={styles.modalClose}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityLabel="Close time windows"
+              accessibilityRole="button"
+            >
               <Text style={styles.modalCloseText}>✕</Text>
             </TouchableOpacity>
           </View>

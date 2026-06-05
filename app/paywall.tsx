@@ -186,6 +186,23 @@ export default function PaywallScreen() {
               <Text style={styles.purchaseBtnText}>Close</Text>
             </LinearGradient>
           </TouchableOpacity>
+          {/* Restore is critical here: a user with an active subscription
+              whose offerings fetch failed (e.g. App Store unreachable but
+              their receipt is local) otherwise has no recovery path other
+              than Profile-tab restore. Required by App Store Guideline
+              3.1.1 — Restore must always be reachable. */}
+          <TouchableOpacity
+            onPress={handleRestore}
+            disabled={purchasing}
+            style={[styles.restoreBtn, { marginTop: 8 }]}
+            accessibilityLabel="Restore previous purchases"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: purchasing, busy: purchasing }}
+          >
+            <Text style={styles.restoreBtnText}>
+              {purchasing ? 'Restoring…' : 'Restore Purchases'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -300,7 +317,11 @@ export default function PaywallScreen() {
           </TouchableOpacity>
 
           <Text style={styles.legal}>
-            Payment will be charged to your App Store account at confirmation of purchase. Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period. Cancel anytime in App Store Settings. By purchasing you agree to our{' '}
+            Payment will be charged to your Apple ID account at confirmation of purchase.{' '}
+            <Text style={styles.legalBold}>The 3-month plan auto-renews every 3 months</Text> at the price shown above.{' '}
+            <Text style={styles.legalBold}>The annual plan auto-renews every 12 months</Text> at the price shown above. Auto-renewal can be turned off at any time by going to your Apple ID Account Settings — cancellation must be made at least 24 hours before the end of the current period to avoid being charged for the next.{' '}
+            <Text style={styles.legalBold}>Lifetime is a one-time purchase and does not auto-renew.</Text>
+            {' '}By purchasing you agree to our{' '}
             <Text style={styles.legalLink} onPress={() => router.push('/legal/terms')}>Terms of Service</Text>
             {' '}and{' '}
             <Text style={styles.legalLink} onPress={() => router.push('/legal/privacy')}>Privacy Policy</Text>.
@@ -346,5 +367,6 @@ const styles = StyleSheet.create({
   restoreBtn: { alignItems: 'center', paddingVertical: 12 },
   restoreBtnText: { fontSize: 13, color: Colors.muted, fontFamily: Fonts.cinzel, textDecorationLine: 'underline' },
   legal: { fontSize: 10, color: Colors.mutedDark, textAlign: 'center', lineHeight: 15, marginTop: Spacing.sm, fontFamily: Fonts.crimson },
+  legalBold: { color: Colors.muted, fontFamily: Fonts.crimson },
   legalLink: { color: Colors.gold, textDecorationLine: 'underline' },
 });

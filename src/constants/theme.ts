@@ -9,8 +9,11 @@ export const Colors = {
   goldDim: 'rgba(201,168,76,0.15)',
   amber: '#E07B39',
   star: '#F5F0E8',
-  muted: 'rgba(245,240,232,0.45)',
-  mutedDark: 'rgba(245,240,232,0.25)',
+  // Bumped from 0.45 → 0.62 to pass WCAG AA contrast on the midnight
+  // background for ≤14pt body copy (statSub, archivePreview, panchang
+  // lines, etc.). Previously sat at ~4:1, marginally failing 4.5:1 AA.
+  muted: 'rgba(245,240,232,0.62)',
+  mutedDark: 'rgba(245,240,232,0.4)',
   ruby: '#C0392B',
   emerald: '#27AE60',
   sapphire: '#2980B9',

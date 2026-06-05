@@ -128,6 +128,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     appHmacSecret: process.env.APP_HMAC_SECRET ?? '',
     revenueCatIosKey: process.env.REVENUECAT_IOS_KEY ?? '',
     revenueCatAndroidKey: process.env.REVENUECAT_ANDROID_KEY ?? '',
+    // Sentry DSN — sourced from EAS Project Secrets at build time. Empty
+    // string disables telemetry gracefully (see src/services/telemetry.ts).
+    sentryDsn: process.env.SENTRY_DSN ?? '',
     buildProfile: process.env.EAS_BUILD_PROFILE ?? 'local',
     enableTestMode: process.env.ENABLE_TEST_MODE ?? 'false',
   },
